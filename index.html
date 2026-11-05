@@ -1,0 +1,2316 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Đọc song song bản tiếng Việt và tiếng Anh của một cuốn sách, bôi từ để học, ôn bằng thẻ nhớ, đồng bộ qua repo GitHub riêng.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://api.github.com https://cdnjs.cloudflare.com; img-src 'self' data: blob:; worker-src 'self' blob: https://cdnjs.cloudflare.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Đọc song ngữ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<style>
+/* Bố cục: thanh điều khiển trên cùng → hai bản sách + gáy ở giữa → sổ từ trượt bên phải (điện thoại: tấm kéo từ dưới lên). */
+:root {
+  --desk: #E4E8EC;
+  --surface: #FFFFFF;
+  --ink: #1C2530;
+  --muted: #64707D;
+  --line: #CDD3DA;
+  --accent: #1F5F8B;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #DCE8F2;
+  --warn: #A0522D;
+  --danger: #B3261E;
+  --ok: #2E7D4F;
+  --scrim: rgba(20, 28, 38, .45);
+  --tool-bg: #1C2530;
+  --tool-ink: #F1F4F7;
+  --page-shadow: 0 1px 2px rgba(28, 37, 48, .12), 0 4px 14px rgba(28, 37, 48, .08);
+  --pop-shadow: 0 8px 28px rgba(28, 37, 48, .18), 0 1px 3px rgba(28, 37, 48, .12);
+  /* Màu bút dạ quang: trang PDF luôn là giấy trắng nên giữ nguyên ở cả hai theme */
+  --hl-vocab: #FFD84D;
+  --hl-phrase: #9EDC8C;
+  --hl-grammar: #9CCBF5;
+  --hl-quote: #F6AECB;
+  --echo: #D9822B;
+  --font: "Be Vietnam Pro", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --serif: "Literata", Georgia, "Times New Roman", serif;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --desk: #14191F; --surface: #1E252D; --ink: #E2E7ED; --muted: #94A0AD;
+    --line: #313A44; --accent: #6FB3E0; --accent-ink: #0E1A24; --accent-soft: #23384A;
+    --warn: #E09A6F; --danger: #F2938B; --ok: #6CC28F; --scrim: rgba(0, 0, 0, .6);
+    --tool-bg: #E2E7ED; --tool-ink: #141A20;
+    --page-shadow: 0 2px 12px rgba(0, 0, 0, .45); --pop-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --desk: #14191F; --surface: #1E252D; --ink: #E2E7ED; --muted: #94A0AD;
+  --line: #313A44; --accent: #6FB3E0; --accent-ink: #0E1A24; --accent-soft: #23384A;
+  --warn: #E09A6F; --danger: #F2938B; --ok: #6CC28F; --scrim: rgba(0, 0, 0, .6);
+  --tool-bg: #E2E7ED; --tool-ink: #141A20;
+  --page-shadow: 0 2px 12px rgba(0, 0, 0, .45); --pop-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: inherit; }
+[hidden] { display: none !important; }
+html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  height: 100%; margin: 0; background: var(--surface); color: var(--ink);
+  font: 400 14px/1.45 var(--font); display: flex; flex-direction: column; overflow: hidden;
+}
+button, select, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.muted { color: var(--muted); }
+.small { font-size: 12.5px; }
+
+/* ---------- Thanh điều khiển ---------- */
+.bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--surface);
+}
+.bar h1 { font-size: 15px; font-weight: 600; margin: 0 8px 0 0; letter-spacing: -.01em; }
+.ctrl { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.ctrl select, .ctrl input, .dr-tools select, .dr-tools input {
+  background: var(--desk); border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 8px; color: var(--ink);
+}
+.ctrl input[type="number"] { width: 64px; }
+.btn {
+  background: transparent; border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 10px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:hover { background: var(--desk); }
+.btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .55; cursor: default; }
+.badge {
+  min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--desk); color: var(--ink);
+  font-size: 12px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
+}
+.btn.primary .badge { background: var(--accent-ink); color: var(--accent); }
+.zoom { display: flex; align-items: center; gap: 4px; }
+.zoom .btn { width: 30px; padding: 4px 0; justify-content: center; }
+.zoom output { min-width: 46px; text-align: center; color: var(--ink); font-variant-numeric: tabular-nums; }
+.spacer { flex: 1; }
+.hint { color: var(--muted); font-size: 12.5px; }
+kbd {
+  font: 500 11px/1 var(--font); padding: 2px 5px; border-radius: 4px; border: 1px solid var(--line);
+  background: var(--desk); color: var(--muted);
+}
+
+/* ---------- Khung chính ---------- */
+.app { flex: 1; min-height: 0; display: flex; }
+.book { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.book.swapped { flex-direction: row-reverse; }
+.pane { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--desk); }
+.pane-head {
+  display: flex; align-items: center; gap: 10px; padding: 7px 12px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.pane-head .lang { font-weight: 600; }
+.pane-head .fname { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.pane-head .pg { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.pane-head label.btn input, label.filebtn input { display: none; }
+
+.scroller { flex: 1; min-height: 0; overflow: auto; position: relative; overscroll-behavior: contain; }
+.pages { position: relative; margin: 0 auto; }
+.page { position: absolute; background: #fff; box-shadow: var(--page-shadow); isolation: isolate; }
+.page canvas { display: block; position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; }
+.page .num {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  color: #9AA4AE; font-size: 13px;
+}
+.invert .page canvas { filter: invert(.9) hue-rotate(180deg); }
+.invert .page { background: #1a1a1a; }
+
+/* Vệt bôi: lớp giữa canvas và lớp chữ */
+/* multiply đặt trên cả lớp (không phải từng vệt): lớp có z-index là một stacking context riêng,
+   blend bên trong nó chỉ trộn với nền trong suốt nên sẽ phủ đặc lên chữ. */
+.hl { position: absolute; inset: 0; z-index: 2; pointer-events: none; mix-blend-mode: multiply; }
+.hl i { position: absolute; border-radius: 2px; background: var(--k); }
+.invert .hl { mix-blend-mode: normal; opacity: .4; }
+.no-marks .hl { display: none; }
+.hl i.flash { animation: flash 1.1s ease-in-out 2; }
+@keyframes flash { 50% { box-shadow: 0 0 0 3px var(--accent); } }
+.k-vocab { --k: var(--hl-vocab); }
+.k-phrase { --k: var(--hl-phrase); }
+.k-grammar { --k: var(--hl-grammar); }
+.k-quote { --k: var(--hl-quote); }
+
+/* Lớp chữ PDF.js 3.x (CSS rút gọn từ pdf_viewer.css) */
+.textLayer {
+  position: absolute; text-align: initial; inset: 0; overflow: hidden; line-height: 1; z-index: 3;
+  -webkit-text-size-adjust: none; text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0;
+}
+.textLayer :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.textLayer span.markedContent { top: 0; height: 0; }
+.textLayer ::selection { background: rgba(31, 95, 139, .32); }
+.textLayer br::selection { background: transparent; }
+.textLayer .endOfContent { display: block; position: absolute; inset: 100% 0 0; z-index: -1; cursor: default; user-select: none; }
+.textLayer.selecting .endOfContent { top: 0; }
+.textLayer mark.echo {
+  color: transparent; background: transparent; padding: 0; cursor: pointer;
+  border-bottom: 2px dotted var(--echo);
+}
+.no-echo .textLayer mark.echo { border-bottom-color: transparent; }
+
+.empty {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 12px; padding: 24px; text-align: center; color: var(--muted);
+}
+.empty strong { color: var(--ink); font-weight: 500; font-size: 15px; }
+.pane.dragover .scroller { outline: 2px dashed var(--accent); outline-offset: -8px; }
+.status { color: var(--warn); }
+
+/* Gáy sách: nơi giữ nút khóa đồng bộ */
+.spine {
+  flex: 0 0 44px; display: flex; align-items: center; justify-content: center;
+  background: var(--surface); border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+}
+.lock {
+  width: 34px; height: 64px; border-radius: 17px; border: 1px solid var(--line);
+  background: var(--desk); cursor: pointer; display: grid; place-items: center; padding: 0;
+  transition: background .15s, border-color .15s;
+}
+.lock svg { width: 18px; height: 18px; stroke: var(--muted); fill: none; stroke-width: 2; stroke-linecap: round; }
+.lock[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+.lock[aria-pressed="true"] svg { stroke: var(--accent-ink); }
+.lock .open { display: none; }
+.lock[aria-pressed="false"] .closed { display: none; }
+.lock[aria-pressed="false"] .open { display: block; }
+
+/* ---------- Thanh bôi khi chọn chữ ---------- */
+.seltool {
+  position: fixed; z-index: 45; display: flex; align-items: center; gap: 2px; padding: 4px;
+  background: var(--tool-bg); color: var(--tool-ink); border-radius: 8px; box-shadow: var(--pop-shadow);
+}
+.seltool button {
+  border: 0; background: transparent; color: inherit; padding: 6px 8px; border-radius: 5px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap;
+}
+.seltool button:hover { background: rgba(127, 140, 155, .25); }
+.seltool .dot { width: 11px; height: 11px; }
+.seltool .sep { width: 1px; align-self: stretch; margin: 4px 3px; background: rgba(127, 140, 155, .45); }
+.seltool kbd { background: transparent; border-color: rgba(127, 140, 155, .5); color: inherit; opacity: .7; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--k); flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+
+/* ---------- Thẻ chi tiết từ ---------- */
+.card {
+  position: fixed; z-index: 40; width: min(360px, calc(100vw - 16px)); max-height: min(72vh, 620px); overflow: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--pop-shadow);
+  padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px;
+}
+.card-head { display: flex; align-items: flex-start; gap: 8px; }
+.term { font: 600 20px/1.25 var(--serif); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.term.long { font-size: 16px; font-weight: 400; font-style: italic; }
+.icon-btn {
+  border: 0; background: transparent; cursor: pointer; color: var(--muted); padding: 4px; border-radius: 5px;
+  display: inline-grid; place-items: center; line-height: 1;
+}
+.icon-btn:hover { background: var(--desk); color: var(--ink); }
+.icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.card-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; color: var(--muted); margin-top: -4px; }
+.card-sub .ipa { font-family: var(--serif); color: var(--ink); }
+.kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1px solid var(--line); background: transparent; border-radius: 14px; padding: 2px 10px 2px 8px;
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; white-space: nowrap;
+}
+.chip[aria-pressed="true"] { border-color: var(--ink); background: var(--desk); font-weight: 500; }
+.fld { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.fld textarea {
+  resize: vertical; min-height: 38px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--desk); color: var(--ink); font-size: 14px; line-height: 1.4;
+}
+.ai { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.ai:empty { display: none; }
+.ai .row { display: grid; grid-template-columns: 88px 1fr; gap: 8px; }
+.ai .row > span:first-child { color: var(--muted); font-size: 12.5px; padding-top: 1px; }
+.ai .row > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.ai .busy { color: var(--muted); font-style: italic; }
+.ai .err { color: var(--warn); }
+.ctx {
+  margin: 0; padding: 8px 10px; border-left: 3px solid var(--line); background: var(--desk); border-radius: 0 6px 6px 0;
+  font: 400 14px/1.55 var(--serif); overflow-wrap: anywhere;
+}
+.ctx b { font-weight: 600; background: color-mix(in srgb, var(--hl-vocab) 55%, transparent); color: var(--ink); padding: 0 1px; border-radius: 2px; }
+.card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dict { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12.5px; }
+.dict a { color: var(--accent); text-decoration: none; }
+.dict a:hover { text-decoration: underline; }
+.card-meta { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- Sổ từ ---------- */
+.drawer {
+  flex: 0 0 360px; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+  background: var(--surface); border-left: 1px solid var(--line);
+}
+.dr-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px 6px 12px; }
+.dr-head .muted { flex: 1; font-size: 12.5px; text-align: right; }
+.tabs { display: flex; gap: 2px; background: var(--desk); border-radius: 7px; padding: 2px; }
+.tabs button {
+  border: 0; background: transparent; padding: 4px 12px; border-radius: 5px; cursor: pointer; font-weight: 500; color: var(--muted);
+}
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.dr-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.lib-row { display: flex; align-items: stretch; }
+.lib-main {
+  flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; cursor: pointer; padding: 10px 6px 10px 16px;
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: baseline;
+}
+.lib-main:hover { background: var(--desk); }
+.lib-lang {
+  font-size: 11px; font-weight: 600; letter-spacing: .05em; padding: 1px 5px; border-radius: 4px;
+  border: 1px solid var(--line); color: var(--muted); align-self: center;
+}
+.lib-name { font-weight: 500; overflow-wrap: anywhere; min-width: 0; }
+.lib-main .nb-meta, .lib-main .prog { grid-column: 2; }
+.prog { height: 4px; border-radius: 2px; background: var(--desk); overflow: hidden; }
+.prog i { display: block; height: 100%; background: var(--accent); }
+.lib-open { color: var(--accent); font-weight: 500; }
+.lib-del { align-self: center; margin-right: 8px; font-size: 12.5px; white-space: nowrap; }
+.lib-del.armed { color: var(--danger); }
+.dr-tools { display: flex; flex-direction: column; gap: 8px; padding: 4px 16px 10px; border-bottom: 1px solid var(--line); }
+.dr-tools input[type="search"] { width: 100%; }
+.dr-tools .row { display: flex; gap: 8px; }
+.dr-tools .row select { flex: 1; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.nb-list { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow: auto; }
+.nb-item { border-bottom: 1px solid var(--line); }
+.nb-main {
+  width: 100%; text-align: left; border: 0; background: transparent; cursor: pointer; padding: 10px 16px;
+  display: grid; grid-template-columns: 10px 1fr; gap: 3px 10px; align-items: baseline;
+}
+.nb-main:hover { background: var(--desk); }
+.nb-main .dot { align-self: center; }
+.nb-term { font: 600 15.5px/1.3 var(--serif); overflow-wrap: anywhere; min-width: 0; }
+.nb-term .ipa { font-weight: 400; font-size: 13px; color: var(--muted); margin-left: 6px; }
+.nb-mean, .nb-ctx, .nb-meta { grid-column: 2; min-width: 0; }
+.nb-mean { color: var(--ink); }
+.nb-mean.none { color: var(--muted); font-style: italic; }
+.nb-ctx {
+  font: 400 13px/1.45 var(--serif); color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.nb-ctx b { color: var(--ink); font-weight: 600; }
+.nb-meta { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.nb-meta .due { color: var(--accent); font-weight: 500; }
+.nb-empty { padding: 28px 20px; color: var(--muted); text-align: center; }
+.nb-empty strong { display: block; color: var(--ink); font-weight: 500; margin-bottom: 6px; }
+.dr-foot { border-top: 1px solid var(--line); padding: 10px 16px 12px; display: flex; flex-direction: column; gap: 8px; }
+.dr-foot label.opt { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.dr-foot .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.dr-foot p { margin: 0; }
+
+/* ---------- Ôn tập ---------- */
+.review {
+  position: fixed; inset: 0; z-index: 50; background: var(--scrim); display: grid; place-items: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px));
+}
+.rv-card {
+  width: min(600px, 100%); max-height: 100%; overflow: auto; background: var(--surface); border-radius: 12px;
+  box-shadow: var(--pop-shadow); padding: 18px 22px 20px; display: flex; flex-direction: column; gap: 14px;
+}
+.rv-top { display: flex; align-items: center; gap: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rv-top span { flex: 1; }
+.rv-q { font-size: 12.5px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.rv-sent { font: 400 21px/1.55 var(--serif); margin: 0; overflow-wrap: anywhere; }
+.rv-sent b { font-weight: 600; }
+.rv-sent .blank {
+  display: inline-block; min-width: 3ch; border-bottom: 2px solid var(--accent); color: transparent; user-select: none;
+  line-height: 1.1;
+}
+.rv-ans { font: 600 26px/1.25 var(--serif); overflow-wrap: anywhere; }
+.rv-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--muted); }
+.rv-sub .ipa { font-family: var(--serif); color: var(--ink); font-size: 16px; }
+.rv-mean { font-size: 17px; }
+.rv-hint { color: var(--accent); font-size: 15px; }
+.rv-src { font-size: 12.5px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.rv-src button { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 12.5px; }
+.rv-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.rv-actions.two { grid-template-columns: 1fr 1fr; }
+.rv-actions.one { grid-template-columns: 1fr; }
+.rate { flex-direction: column; gap: 2px; padding: 8px 6px; justify-content: center; }
+.rate small { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.rate.r1 { border-color: var(--danger); }
+.btn.primary small { color: inherit; opacity: .85; }
+.rv-empty { text-align: center; padding: 16px 0 4px; }
+.rv-big { font: 400 20px/1.4 var(--serif); margin: 0 0 6px; }
+
+.gh-line { display: flex; align-items: center; gap: 8px; }
+.gh-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.gh-dot.idle { background: var(--ok); }
+.gh-dot.syncing { background: var(--accent); }
+.gh-dot.error { background: var(--danger); }
+.fld input {
+  padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--desk); color: var(--ink); font-size: 14px;
+}
+.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.steps a, .ai-links a { color: var(--accent); }
+code { font-size: 12.5px; background: var(--desk); padding: 1px 4px; border-radius: 4px; }
+.paste {
+  width: 100%; min-height: 180px; resize: vertical; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--desk); color: var(--ink); font: 13px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.ai-links { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); }
+.msg-err { color: var(--danger); }
+.msg-ok { color: var(--ok); }
+.toast {
+  position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60;
+  background: var(--tool-bg); color: var(--tool-ink); padding: 9px 14px; border-radius: 8px; box-shadow: var(--pop-shadow);
+  max-width: min(520px, calc(100vw - 32px)); font-size: 13.5px;
+}
+
+@media (max-width: 1500px) { .hint { display: none; } }
+@media (max-width: 760px) {
+  .book, .book.swapped { flex-direction: column; }
+  .book.swapped { flex-direction: column-reverse; }
+  .spine { flex: 0 0 40px; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .lock { width: 64px; height: 30px; }
+  .hint { display: none; }
+  .drawer {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 72%; z-index: 30; border-left: 0;
+    border-top: 1px solid var(--line); border-radius: 12px 12px 0 0; box-shadow: var(--pop-shadow);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .card.sheet {
+    left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto; max-height: 66%;
+    border-radius: 12px 12px 0 0; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .rv-sent { font-size: 18px; }
+  .rv-actions { grid-template-columns: repeat(2, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lock { transition: none; }
+  .hl i.flash { animation: none; box-shadow: 0 0 0 3px var(--accent); }
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>Đọc song ngữ</h1>
+  <label class="ctrl">Đồng bộ
+    <select id="mode">
+      <option value="page">Theo trang</option>
+      <option value="percent">Theo % độ dài</option>
+    </select>
+  </label>
+  <label class="ctrl" id="offsetWrap" title="Trang bên phải = trang bên trái + độ lệch">Lệch trang
+    <input id="offset" type="number" step="1" value="0">
+  </label>
+  <div class="ctrl zoom" aria-label="Thu phóng">
+    <button class="btn" id="zoomOut" aria-label="Thu nhỏ">−</button>
+    <output id="zoomLabel">100%</output>
+    <button class="btn" id="zoomIn" aria-label="Phóng to">+</button>
+  </div>
+  <button class="btn" id="invert" aria-pressed="false">Đảo màu trang</button>
+  <button class="btn" id="swap">Đổi bên</button>
+  <span class="spacer"></span>
+  <span class="hint">Bôi chữ để lưu · <kbd>1</kbd>–<kbd>4</kbd> chọn loại · <kbd>N</kbd> sổ từ · <kbd>B</kbd> thư viện · <kbd>R</kbd> ôn · <kbd>L</kbd> khóa</span>
+  <button class="btn" id="libBtn" aria-pressed="false"><span class="gh-dot" id="ghDotTop"></span>Thư viện</button>
+  <button class="btn" id="nbBtn" aria-pressed="false">Sổ từ <span class="badge" id="nbCount">0</span></button>
+  <button class="btn primary" id="reviewBtn">Ôn tập <span class="badge" id="dueCount">0</span></button>
+</header>
+
+<div class="app">
+  <main class="book" id="book">
+    <section class="pane" id="paneA" data-key="A">
+      <div class="pane-head">
+        <span class="lang">Tiếng Việt</span>
+        <span class="fname">Chưa mở file</span>
+        <span class="pg"></span>
+        <label class="btn">Mở PDF<input type="file" accept="application/pdf,.pdf"></label>
+      </div>
+      <div class="scroller" tabindex="0">
+        <div class="pages"></div>
+        <div class="empty"><strong>Mở bản tiếng Việt</strong><span>Bấm “Mở PDF” hoặc kéo thả file vào đây.</span></div>
+      </div>
+    </section>
+
+    <div class="spine">
+      <button class="lock" id="lock" aria-pressed="true" title="Đang đồng bộ (L)" aria-label="Khóa đồng bộ cuộn">
+        <svg class="closed" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+        <svg class="open" viewBox="0 0 24 24"><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><path d="M9 17H7A5 5 0 0 1 7 7h2"/></svg>
+      </button>
+    </div>
+
+    <section class="pane" id="paneB" data-key="B">
+      <div class="pane-head">
+        <span class="lang">Tiếng Anh</span>
+        <span class="fname">Chưa mở file</span>
+        <span class="pg"></span>
+        <label class="btn">Mở PDF<input type="file" accept="application/pdf,.pdf"></label>
+      </div>
+      <div class="scroller" tabindex="0">
+        <div class="pages"></div>
+        <div class="empty"><strong>Mở bản tiếng Anh</strong><span>Bấm “Mở PDF” hoặc kéo thả file vào đây. Bôi chữ trên trang để lưu từ cần học.</span></div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="drawer" id="drawer" hidden aria-label="Sổ từ và thư viện">
+    <div class="dr-head">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tabNb" data-tab="nb" aria-selected="true">Sổ từ</button>
+        <button role="tab" id="tabLib" data-tab="lib" aria-selected="false">Thư viện</button>
+      </div>
+      <span class="muted" id="nbSummary"></span>
+      <button class="icon-btn" id="nbClose" aria-label="Đóng"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="dr-panel" id="nbPanel">
+    <div class="dr-tools">
+      <input id="nbSearch" type="search" placeholder="Tìm từ, nghĩa, ghi chú" aria-label="Tìm trong sổ từ">
+      <div class="chips" id="nbKinds"></div>
+      <div class="row">
+        <select id="nbScope" aria-label="Phạm vi"><option value="open">Sách đang mở</option><option value="all">Tất cả sách</option></select>
+        <select id="nbSort" aria-label="Sắp xếp"><option value="page">Theo trang</option><option value="new">Mới lưu trước</option><option value="due">Sắp đến hạn ôn</option></select>
+      </div>
+    </div>
+    <ul class="nb-list" id="nbList"></ul>
+    <div class="dr-foot">
+      <label class="opt"><input type="checkbox" id="optMarks"> Hiện vệt bôi trên trang</label>
+      <label class="opt"><input type="checkbox" id="optEcho"> Gạch chân từ đã lưu khi gặp lại</label>
+      <div class="row">
+        <button class="btn" id="nbCopy">Chép prompt giải nghĩa</button>
+        <button class="btn" id="nbPaste">Dán kết quả</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="exportCsv">Xuất CSV cho Anki</button>
+      </div>
+    </div>
+    </div>
+    <div class="dr-panel" id="libPanel" hidden>
+      <ul class="nb-list" id="libList"></ul>
+      <div class="dr-foot">
+        <div class="gh-line"><span class="gh-dot" id="ghDot"></span><span id="ghStatus">Chưa đồng bộ</span></div>
+        <div class="row">
+          <button class="btn primary" id="ghBtn">Kết nối GitHub</button>
+          <button class="btn" id="ghSyncNow" hidden>Đồng bộ ngay</button>
+        </div>
+        <label class="opt" id="optCloudWrap"><input type="checkbox" id="optCloud"> Lưu file PDF vào repo để mở trên máy khác (tối đa 40 MB/file)</label>
+        <div class="row">
+          <button class="btn" id="exportAll">Sao lưu toàn bộ</button>
+          <label class="btn filebtn">Nhập bản sao lưu<input type="file" id="importAll" accept=".json,application/json"></label>
+        </div>
+        <p class="muted small" id="syncState"></p>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="seltool" id="seltool" hidden role="toolbar" aria-label="Đánh dấu chữ đã chọn"></div>
+
+<div class="card" id="card" hidden role="dialog" aria-label="Chi tiết từ đã lưu">
+  <div class="card-head">
+    <div class="term" id="cTerm"></div>
+    <button class="icon-btn" id="cSpeak" aria-label="Phát âm" title="Phát âm"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
+    <button class="icon-btn" id="cClose" aria-label="Đóng"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="card-sub" id="cSub"></div>
+  <div class="kinds" id="cKinds"></div>
+  <label class="fld" id="cMeaningWrap"><span id="cMeaningLabel">Nghĩa</span><textarea id="cMeaning" rows="2" placeholder="Tự ghi nghĩa, hoặc bấm Giải nghĩa"></textarea></label>
+  <div class="ai" id="cAi"></div>
+  <blockquote class="ctx" id="cCtx"></blockquote>
+  <label class="fld">Ghi chú<textarea id="cNote" rows="2" placeholder="Mẹo nhớ, câu tự đặt…"></textarea></label>
+  <div class="card-actions">
+    <button class="btn primary" id="cCopy">Chép prompt giải nghĩa</button>
+    <button class="btn" id="cPaste">Dán kết quả</button>
+    <span class="dict" id="cDict"></span>
+  </div>
+  <div class="card-meta"><span id="cMeta"></span><button class="btn danger" id="cDelete">Xóa</button></div>
+</div>
+
+<div class="review" id="review" hidden role="dialog" aria-modal="true" aria-label="Ôn tập">
+  <div class="rv-card">
+    <div class="rv-top"><span id="rvProg"></span><button class="icon-btn" id="rvClose" aria-label="Đóng ôn tập"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div id="rvBody" style="display:flex;flex-direction:column;gap:12px"></div>
+    <div class="rv-actions" id="rvActions"></div>
+  </div>
+</div>
+
+<div class="review" id="ghDlg" hidden role="dialog" aria-modal="true" aria-label="Kết nối GitHub">
+  <form class="rv-card" id="ghForm" autocomplete="off">
+    <div class="rv-top"><span>Đồng bộ qua repo GitHub</span><button type="button" class="icon-btn" id="ghClose" aria-label="Đóng"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <ol class="steps">
+      <li>Tạo một repo <b>private</b> để chứa dữ liệu, ví dụ <code>song-ngu-data</code>, tại <a href="https://github.com/new" target="_blank" rel="noopener">github.com/new</a>. Tick “Add a README file” để repo có sẵn nhánh <code>main</code>.</li>
+      <li>Tạo token tại <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Settings → Developer settings → Fine-grained tokens</a>. Repository access: <i>Only select repositories</i>, chọn đúng repo dữ liệu. Permissions → Repository permissions → <i>Contents: Read and write</i>.</li>
+      <li>Dán vào đây. Mỗi máy làm bước này một lần; token chỉ lưu trong trình duyệt của máy đó.</li>
+    </ol>
+    <label class="fld">Repo dữ liệu (chủ/tên)<input id="ghRepo" placeholder="ten-ban/song-ngu-data" spellcheck="false" required></label>
+    <label class="fld">Nhánh<input id="ghBranch" placeholder="main" spellcheck="false"></label>
+    <label class="fld">Token<input id="ghToken" type="password" placeholder="github_pat_…" spellcheck="false"></label>
+    <p class="small" id="ghMsg"></p>
+    <div class="rv-actions two">
+      <button type="button" class="btn" id="ghDisconnect">Ngắt kết nối trên máy này</button>
+      <button type="submit" class="btn primary" id="ghSave">Kiểm tra và kết nối</button>
+    </div>
+  </form>
+</div>
+
+<div class="review" id="pasteDlg" hidden role="dialog" aria-modal="true" aria-label="Dán kết quả giải nghĩa">
+  <div class="rv-card">
+    <div class="rv-top"><span id="pasteTitle">Dán câu trả lời của AI</span><button type="button" class="icon-btn" id="pasteClose" aria-label="Đóng"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="ai-links">Mở chat:
+      <a href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT</a>
+      <a href="https://claude.ai/new" target="_blank" rel="noopener">Claude</a>
+      <a href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini</a>
+    </div>
+    <p class="muted small" style="margin:0">Chép nguyên câu trả lời, kể cả phần chữ ngoài khối JSON, dán vào ô dưới rồi bấm Áp dụng. Trang tự tìm khối JSON và ghép vào đúng từ theo <code>id</code>.</p>
+    <textarea class="paste" id="pasteBox" spellcheck="false" aria-label="Câu trả lời của AI"></textarea>
+    <p class="small" id="pasteMsg" style="margin:0"></p>
+    <div class="rv-actions two">
+      <button type="button" class="btn" id="pasteRead">Lấy từ bộ nhớ tạm</button>
+      <button type="button" class="btn primary" id="pasteApply">Áp dụng</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  const pdfjsLib = window["pdfjs-dist/build/pdf"];
+  if (!pdfjsLib) {
+    document.body.insertAdjacentHTML("afterbegin", '<p class="status" style="padding:12px">Không tải được thư viện PDF.js. Kiểm tra kết nối mạng rồi tải lại trang.</p>');
+    return;
+  }
+  // pdf.worker.min.js đã nạp qua <script>; Web Worker cross-origin bị chặn nên PDF.js lùi về worker giả trên main thread.
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  const $ = (id) => document.getElementById(id);
+  const GAP = 14, PAD = 16, MAX_PIXELS = 16e6;
+  const ZOOMS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+  const DAY = 864e5;
+  const LANG = { A: "vi", B: "en" };
+  const LANG_LABEL = { vi: "Tiếng Việt", en: "Tiếng Anh" };
+  const KINDS = [
+    { key: "vocab", label: "Từ mới" },
+    { key: "phrase", label: "Cụm từ" },
+    { key: "grammar", label: "Cấu trúc" },
+    { key: "quote", label: "Câu hay" },
+  ];
+  const KIND = Object.fromEntries(KINDS.map((k) => [k.key, k]));
+  const kindOf = (it) => (KIND[it.kind] ? it.kind : "vocab");
+  const settings = {
+    mode: "page", offset: 0, pctOffset: 0, locked: true, zoomIdx: 4, invert: false, swapped: false,
+    marks: true, echo: true, nbOpen: false, nbScope: "open", nbSort: "page", nbKind: "all", tab: "nb", cloudPdf: true,
+  };
+  const SPEAKER = '<svg viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+
+  /* ---------------- Tiện ích ---------------- */
+  function h(tag, props, ...kids) {
+    const el = document.createElement(tag);
+    if (props) for (const [k, v] of Object.entries(props)) {
+      if (v == null || v === false) continue;
+      if (k === "class") el.className = v;
+      else if (k === "text") el.textContent = v;
+      else if (k === "html") el.innerHTML = v; // chỉ dùng cho SVG hằng số
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (k === "dataset") Object.assign(el.dataset, v);
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const c of kids.flat()) if (c != null && c !== false) el.append(c instanceof Node ? c : String(c));
+    return el;
+  }
+  const str = (v) => (typeof v === "string" ? v.trim() : "");
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const wordCount = (s) => (s.trim() ? s.trim().split(/\s+/).length : 0);
+  // Chèn văn bản với cụm `term` được in đậm (không dùng innerHTML).
+  function fillBold(el, text, term) {
+    el.replaceChildren();
+    if (!text) return;
+    const i = term ? text.toLowerCase().indexOf(term.toLowerCase()) : -1;
+    if (i < 0) { el.textContent = text; return; }
+    el.append(text.slice(0, i), h("b", { text: text.slice(i, i + term.length) }), text.slice(i + term.length));
+  }
+  function fmtDur(ms) {
+    const m = Math.round(ms / 60e3);
+    if (m < 60) return Math.max(1, m) + " phút";
+    const hr = Math.round(m / 60);
+    if (hr < 24) return hr + " giờ";
+    const d = Math.round(ms / DAY);
+    if (d < 30) return d + " ngày";
+    if (d < 365) return Math.round(d / 30) + " tháng";
+    return (d / 365).toFixed(1).replace(".0", "") + " năm";
+  }
+  function dueLabel(it) {
+    const due = it.srs ? it.srs.due : 0, now = Date.now();
+    if (it.kind === "quote") return "";
+    return due <= now ? "đến hạn ôn" : "ôn sau " + fmtDur(due - now);
+  }
+  let toastT = 0;
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 4200);
+  }
+  const speakOK = "speechSynthesis" in window && typeof SpeechSynthesisUtterance === "function";
+  function speak(text) {
+    if (!speakOK || !text) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "en-US"; u.rate = 0.92;
+      const v = speechSynthesis.getVoices().find((x) => /^en(-|_)US/i.test(x.lang)) || speechSynthesis.getVoices().find((x) => /^en/i.test(x.lang));
+      if (v) u.voice = v;
+      speechSynthesis.speak(u);
+    } catch (e) { /* bỏ qua */ }
+  }
+  // Cụm tiếng Anh cần đọc/tra của một mục
+  const enTermOf = (it) => (it.lang === "en" ? it.text : str(it.ai && it.ai.en) || (/^[\x00-\x7F’'–-]+$/.test(it.meaning || "") ? it.meaning : ""));
+
+  /* ---------------- Lưu trữ cài đặt & file PDF (per-viewer) ---------------- */
+  const LS_KEY = "song-ngu:v1";
+  function loadSaved() {
+    try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch (e) { return {}; }
+  }
+  let saved = loadSaved();
+  let saveTimer = 0;
+  function saveSoon() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try {
+        saved = { settings, pos: { A: paneA.getAnchor(), B: paneB.getAnchor() }, files: { A: paneA.fileSig, B: paneB.fileSig } };
+        localStorage.setItem(LS_KEY, JSON.stringify(saved));
+      } catch (e) { /* bỏ qua */ }
+    }, 400);
+  }
+  function idb() {
+    return new Promise((res, rej) => {
+      try {
+        const r = indexedDB.open("song-ngu", 1);
+        r.onupgradeneeded = () => r.result.createObjectStore("files");
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      } catch (e) { rej(e); }
+    });
+  }
+  async function idbPut(key, file) {
+    try { const db = await idb(); db.transaction("files", "readwrite").objectStore("files").put(file, key); } catch (e) { /* bỏ qua */ }
+  }
+  async function idbGet(key) {
+    try {
+      const db = await idb();
+      return await new Promise((res) => {
+        const r = db.transaction("files").objectStore("files").get(key);
+        r.onsuccess = () => res(r.result || null);
+        r.onerror = () => res(null);
+      });
+    } catch (e) { return null; }
+  }
+
+  /* ---------------- Sổ từ: lưu trên trình duyệt, đồng bộ qua repo GitHub ----------------
+     Mỗi mục mang `upd` (lần sửa cuối) để gộp kiểu "bản mới hơn thắng"; mục bị xóa để lại dấu xóa (tomb)
+     để máy khác không hồi sinh nó khi gộp. */
+  const LS_ITEMS = "song-ngu:items:v1";
+  const LS_TOMB = "song-ngu:tomb:v1";
+  let tomb = { items: {}, books: {} };
+  try { const t = JSON.parse(localStorage.getItem(LS_TOMB) || "null"); if (t && t.items && t.books) tomb = t; } catch (e) { /* bỏ qua */ }
+  const saveTomb = () => { try { localStorage.setItem(LS_TOMB, JSON.stringify(tomb)); } catch (e) { /* bỏ qua */ } };
+  const store = {
+    items: new Map(), subs: [], version: 0,
+    on(fn) { this.subs.push(fn); },
+    emit(noSync) { this.version++; this.saveMirror(); for (const f of this.subs) f(); if (!noSync) gh.schedule(); },
+    saveMirror() { try { localStorage.setItem(LS_ITEMS, JSON.stringify([...this.items.values()])); } catch (e) { toast("Bộ nhớ trình duyệt đã đầy, chưa lưu được sổ từ."); } },
+    loadMirror() {
+      try {
+        const arr = JSON.parse(localStorage.getItem(LS_ITEMS) || "[]");
+        for (const it of arr) if (it && it.id && it.text) { delete it._local; this.items.set(it.id, it); }
+      } catch (e) { /* bỏ qua */ }
+    },
+    all() { return [...this.items.values()]; },
+    get(id) { return this.items.get(id); },
+    clean(it) { const c = JSON.parse(JSON.stringify(it)); delete c._local; return c; },
+    put(it, silent) { it.upd = Date.now(); this.items.set(it.id, it); if (!silent) this.emit(); },
+    putMany(list) { for (const it of list) this.put(it, true); this.emit(); },
+    patch(id, fields) { const it = this.items.get(id); if (it) this.put(Object.assign({}, it, fields)); },
+    remove(id) { this.items.delete(id); tomb.items[id] = Date.now(); saveTomb(); this.emit(); },
+    replaceAll(map) { this.items = map; this.emit(true); },
+  };
+  store.loadMirror();
+  function updateSyncState() { renderGhState(); }
+
+  /* ---------------- Lịch ôn (SM-2 rút gọn) ---------------- */
+  function schedule(s, g) {
+    let ivl = (s && s.ivl) || 0, ease = (s && s.ease) || 2.5, reps = (s && s.reps) || 0;
+    const now = Date.now();
+    if (g === 1) return { ivl: 0, ease: Math.max(1.3, +(ease - 0.2).toFixed(2)), reps: 0, due: now + 10 * 60e3, last: now };
+    let n;
+    if (g === 2) { n = Math.round(Math.max(1, ivl) * 1.2); ease -= 0.15; }
+    else if (g === 3) { n = reps === 0 ? 1 : reps === 1 ? 3 : Math.round(ivl * ease); }
+    else { n = reps === 0 ? 4 : Math.round(Math.max(ivl, 1) * ease * 1.3); ease += 0.15; }
+    n = Math.min(3650, Math.max(1, n));
+    return { ivl: n, ease: +Math.max(1.3, ease).toFixed(2), reps: reps + 1, due: now + n * DAY, last: now };
+  }
+  const reviewable = (it) => it.kind !== "quote";
+  const dueItems = () => store.all().filter((it) => reviewable(it) && (it.srs ? it.srs.due : 0) <= Date.now())
+    .sort((a, b) => (a.srs ? a.srs.due : 0) - (b.srs ? b.srs.due : 0));
+
+  /* ---------------- Gạch chân từ đã lưu khi gặp lại ---------------- */
+  const echoCache = { vi: { v: -1 }, en: { v: -1 } };
+  const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  function echoFor(lang) {
+    const c = echoCache[lang];
+    if (c.v === store.version) return c;
+    const terms = new Set();
+    for (const it of store.all()) {
+      if (it.lang !== lang || it.kind === "quote") continue;
+      const t = it.text.toLowerCase().replace(/\s+/g, " ").trim();
+      if (t.length >= 2 && t.length <= 40 && wordCount(t) <= 4) terms.add(t);
+    }
+    const list = [...terms].sort((a, b) => b.length - a.length);
+    c.v = store.version; c.key = list.join("|"); c.re = null;
+    if (list.length) {
+      const parts = list.map((t) => lang === "en" && /^[a-z]+$/.test(t) ? escRe(t) + "(?:s|es|d|ed|ing|'s|’s)?" : escRe(t).replace(/ /g, "\\s+"));
+      try { c.re = new RegExp("(?<![\\p{L}\\p{N}])(?:" + parts.join("|") + ")(?![\\p{L}\\p{N}])", "giu"); }
+      catch (e) { try { c.re = new RegExp("\\b(?:" + parts.join("|") + ")\\b", "gi"); } catch (e2) { c.re = null; } }
+    }
+    return c;
+  }
+  function findEchoItem(lang, matched) {
+    const m = matched.toLowerCase().replace(/\s+/g, " ").trim();
+    let best = null;
+    for (const it of store.all()) {
+      if (it.lang !== lang) continue;
+      const t = it.text.toLowerCase().replace(/\s+/g, " ").trim();
+      if ((m === t || m.startsWith(t)) && (!best || t.length > best.text.length || (t.length === best.text.length && it.created > best.created))) best = it;
+    }
+    return best;
+  }
+  function applyEcho(layer, ec) {
+    for (const m of layer.querySelectorAll("mark.echo")) {
+      const p = m.parentNode; m.replaceWith(document.createTextNode(m.textContent)); if (p) p.normalize();
+    }
+    if (!ec || !ec.re) return;
+    const tw = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
+    const nodes = []; while (tw.nextNode()) nodes.push(tw.currentNode);
+    for (const n of nodes) {
+      const t = n.data; ec.re.lastIndex = 0;
+      if (!ec.re.test(t)) continue;
+      ec.re.lastIndex = 0;
+      const frag = document.createDocumentFragment(); let last = 0;
+      for (const m of t.matchAll(ec.re)) {
+        if (m.index > last) frag.append(t.slice(last, m.index));
+        frag.append(h("mark", { class: "echo", text: m[0] }));
+        last = m.index + m[0].length;
+      }
+      if (last < t.length) frag.append(t.slice(last));
+      n.replaceWith(frag);
+    }
+  }
+
+  /* ---------------- Một bên sách ---------------- */
+  const tcToString = (tc) => tc.items.map((x) => (x.str || "") + (x.hasEOL ? "\n" : "")).join("");
+
+  class Pane {
+    constructor(root) {
+      this.root = root;
+      this.key = root.dataset.key;
+      this.lang = LANG[this.key];
+      this.scroller = root.querySelector(".scroller");
+      this.pagesEl = root.querySelector(".pages");
+      this.emptyEl = root.querySelector(".empty");
+      this.nameEl = root.querySelector(".fname");
+      this.pgEl = root.querySelector(".pg");
+      this.doc = null; this.docId = 0; this.fileSig = null; this.fileName = "";
+      this.sizes = []; this.tops = []; this.heights = []; this.pageEls = [];
+      this.scale = 1; this.rendered = new Map(); this.textCache = new Map();
+      this.hlPages = new Set(); this.echoKey = "";
+      this.expected = null; this.raf = 0;
+      this.peer = null;
+
+      this.scroller.addEventListener("scroll", () => {
+        if (!this.raf) this.raf = requestAnimationFrame(() => { this.raf = 0; this.afterScroll(); });
+      }, { passive: true });
+
+      root.querySelector("input[type=file]").addEventListener("change", (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (f) this.open(f, true);
+        e.target.value = "";
+      });
+      root.addEventListener("dragover", (e) => { e.preventDefault(); root.classList.add("dragover"); });
+      root.addEventListener("dragleave", (e) => { if (!root.contains(e.relatedTarget)) root.classList.remove("dragover"); });
+      root.addEventListener("drop", (e) => {
+        e.preventDefault(); root.classList.remove("dragover");
+        const f = [...(e.dataTransfer.files || [])].find((x) => /pdf$/i.test(x.type) || /\.pdf$/i.test(x.name));
+        if (f) this.open(f, true);
+      });
+      this.pagesEl.addEventListener("pointerdown", (e) => {
+        const l = e.target.closest(".textLayer"); if (l) l.classList.add("selecting");
+      });
+      this.pagesEl.addEventListener("click", (e) => this.onPageClick(e));
+    }
+
+    get ready() { return !!this.doc && this.tops.length > 0; }
+
+    async open(file, isNew, restoreAnchor) {
+      const id = ++this.docId;
+      lib.clearPending(this);
+      this.nameEl.textContent = file.name;
+      this.setEmpty("Đang mở file…", "");
+      try {
+        const data = new Uint8Array(await file.arrayBuffer());
+        const doc = await pdfjsLib.getDocument({ data }).promise;
+        if (id !== this.docId) { doc.destroy(); return; }
+        if (this.doc) this.doc.destroy();
+        this.clearPages();
+        this.doc = doc;
+        this.textCache = new Map();
+        const n = doc.numPages, sizes = new Array(n);
+        const BATCH = 32;
+        for (let s = 0; s < n; s += BATCH) {
+          const jobs = [];
+          for (let i = s; i < Math.min(n, s + BATCH); i++) {
+            jobs.push(doc.getPage(i + 1).then((p) => { const v = p.getViewport({ scale: 1 }); sizes[i] = { w: v.width, h: v.height }; }));
+          }
+          await Promise.all(jobs);
+          if (id !== this.docId) return;
+          this.setEmpty("Đang đọc cấu trúc", Math.min(n, s + BATCH) + " / " + n + " trang");
+        }
+        this.sizes = sizes;
+        this.fileSig = file.name + "|" + file.size;
+        this.fileName = file.name;
+        this.file = file;
+        this.emptyEl.hidden = true;
+        // Sách đã có trong thư viện: mở đúng chỗ đọc lần trước (kể cả từ máy khác).
+        const known = lib.bySig(this.fileSig);
+        this.layout(restoreAnchor || (known && known.pos) || { page: 0, frac: 0, pct: 0 });
+        if (isNew) {
+          idbPut(this.key, file);
+          if (!known && this.peer && this.peer.ready) this.peer.pushTo(this);
+        }
+        lib.touch(this, file, isNew);
+        saveSoon(); onBooksChanged();
+      } catch (err) {
+        if (id !== this.docId) return;
+        this.doc = null;
+        this.setEmpty("Không mở được file này", "File có thể bị hỏng hoặc có mật khẩu. Thử chọn file khác.");
+        this.emptyEl.querySelector("strong").classList.add("status");
+      }
+    }
+
+    setEmpty(title, sub) {
+      this.emptyEl.hidden = false;
+      this.emptyEl.innerHTML = "<strong></strong><span></span>";
+      this.emptyEl.querySelector("strong").textContent = title;
+      this.emptyEl.querySelector("span").textContent = sub;
+    }
+
+    dropRendered(i, r) {
+      try { r.task && r.task.cancel(); } catch (e) { /* bỏ qua */ }
+      try { r.ttask && r.ttask.cancel(); } catch (e) { /* bỏ qua */ }
+      r.canvas.remove(); if (r.layer) r.layer.remove();
+      this.rendered.delete(i);
+    }
+
+    clearPages() {
+      for (const [i, r] of [...this.rendered]) this.dropRendered(i, r);
+      this.pagesEl.innerHTML = "";
+      this.pageEls = []; this.tops = []; this.heights = []; this.hlPages.clear();
+      this.pgEl.textContent = "";
+    }
+
+    layout(anchor) {
+      if (!this.doc) return;
+      const a = anchor || this.getAnchor();
+      const avail = Math.max(120, this.scroller.clientWidth - 2 * PAD);
+      const maxW = Math.max(...this.sizes.map((s) => s.w));
+      this.scale = (avail / maxW) * ZOOMS[settings.zoomIdx];
+      const contW = Math.max(this.scroller.clientWidth, maxW * this.scale + 2 * PAD);
+      this.pagesEl.style.setProperty("--scale-factor", String(this.scale));
+
+      for (const [i, r] of [...this.rendered]) this.dropRendered(i, r);
+
+      const frag = document.createDocumentFragment();
+      const fresh = this.pageEls.length !== this.sizes.length;
+      if (fresh) { this.pagesEl.innerHTML = ""; this.pageEls = []; this.hlPages.clear(); }
+      let y = PAD;
+      this.tops = []; this.heights = [];
+      this.sizes.forEach((s, i) => {
+        const w = s.w * this.scale, hh = s.h * this.scale;
+        let el = this.pageEls[i];
+        if (!el) {
+          el = document.createElement("div");
+          el.className = "page"; el.dataset.i = i;
+          el.innerHTML = '<span class="num">' + (i + 1) + '</span><div class="hl"></div>';
+          this.pageEls[i] = el; frag.appendChild(el);
+        }
+        el.style.cssText = "left:" + (contW - w) / 2 + "px;top:" + y + "px;width:" + w + "px;height:" + hh + "px";
+        this.tops.push(y); this.heights.push(hh);
+        y += hh + GAP;
+      });
+      if (fresh) { this.pagesEl.appendChild(frag); this.drawHighlights(); }
+      this.pagesEl.style.width = contW + "px";
+      this.pagesEl.style.height = y - GAP + PAD + "px";
+      this.setAnchor(a, "page");
+      this.afterScroll(true);
+    }
+
+    pageAt(y) {
+      let lo = 0, hi = this.tops.length - 1;
+      while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (this.tops[mid] <= y) lo = mid; else hi = mid - 1; }
+      return lo;
+    }
+
+    getAnchor() {
+      if (!this.ready) return null;
+      const y = this.scroller.scrollTop;
+      const i = this.pageAt(y);
+      const frac = Math.min(1, Math.max(0, (y - this.tops[i]) / this.heights[i]));
+      const max = this.scroller.scrollHeight - this.scroller.clientHeight;
+      return { page: i, frac, pct: max > 0 ? y / max : 0 };
+    }
+
+    setAnchor(a, mode) {
+      if (!this.ready || !a) return;
+      let y;
+      if (mode === "percent") {
+        const max = this.scroller.scrollHeight - this.scroller.clientHeight;
+        y = Math.min(1, Math.max(0, a.pct)) * max;
+      } else {
+        let p = a.page, f = a.frac;
+        if (p < 0) { p = 0; f = 0; }
+        if (p > this.tops.length - 1) { p = this.tops.length - 1; f = 1; }
+        y = this.tops[p] + f * this.heights[p];
+      }
+      this.scroller.scrollTop = y;
+      this.expected = this.scroller.scrollTop;
+    }
+
+    pushTo(target) {
+      const a = this.getAnchor();
+      if (!a || !target.ready) return;
+      const sign = this.key === "A" ? 1 : -1;
+      if (settings.mode === "percent") {
+        target.setAnchor({ pct: a.pct + sign * settings.pctOffset }, "percent");
+      } else {
+        target.setAnchor({ page: a.page + sign * settings.offset, frac: a.frac }, "page");
+      }
+    }
+
+    afterScroll(silent) {
+      if (!this.ready) return;
+      this.renderVisible();
+      const a = this.getAnchor();
+      this.pgEl.textContent = (a.page + 1) + " / " + this.tops.length;
+      const programmatic = this.expected !== null && Math.abs(this.scroller.scrollTop - this.expected) <= 1.5;
+      if (!silent) this.expected = null;
+      if (!silent && !programmatic && settings.locked && this.peer && this.peer.ready) this.pushTo(this.peer);
+      if (!$("seltool").hidden) placeSeltool();
+      lib.savePos(this);
+      saveSoon();
+    }
+
+    renderVisible() {
+      const top = this.scroller.scrollTop, bottom = top + this.scroller.clientHeight;
+      const first = this.pageAt(top), last = this.pageAt(bottom);
+      const keepFrom = first - 3, keepTo = last + 3;
+      for (const [i, r] of [...this.rendered]) if (i < keepFrom || i > keepTo) this.dropRendered(i, r);
+      for (let i = Math.max(0, first - 1); i <= Math.min(this.tops.length - 1, last + 1); i++) this.renderPage(i);
+    }
+
+    async renderPage(i) {
+      if (this.rendered.has(i)) return;
+      const docId = this.docId, scale = this.scale;
+      const canvas = document.createElement("canvas");
+      const entry = { canvas, task: null, layer: null, ttask: null };
+      this.rendered.set(i, entry);
+      const alive = () => this.rendered.get(i) === entry && docId === this.docId;
+      try {
+        const page = await this.doc.getPage(i + 1);
+        if (!alive()) return;
+        const base = page.getViewport({ scale: 1 });
+        let s = scale * Math.min(window.devicePixelRatio || 1, 2);
+        if (base.width * base.height * s * s > MAX_PIXELS) s = Math.sqrt(MAX_PIXELS / (base.width * base.height));
+        const vp = page.getViewport({ scale: s });
+        canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+        entry.task = page.render({ canvasContext: canvas.getContext("2d"), viewport: vp });
+        await entry.task.promise;
+        if (!alive()) return;
+        this.pageEls[i].appendChild(canvas);
+        // Lớp chữ trong suốt phủ lên canvas: để chọn, bôi và gạch chân từ đã lưu.
+        const tc = await page.getTextContent();
+        if (!alive()) return;
+        if (!this.textCache.has(i)) this.textCache.set(i, tcToString(tc));
+        if (!tc.items.length) return;
+        const layer = document.createElement("div");
+        layer.className = "textLayer";
+        this.pageEls[i].appendChild(layer); entry.layer = layer;
+        entry.ttask = pdfjsLib.renderTextLayer({ textContentSource: tc, container: layer, viewport: page.getViewport({ scale }), textDivs: [] });
+        await entry.ttask.promise;
+        if (!alive()) return;
+        layer.appendChild(h("div", { class: "endOfContent" }));
+        applyEcho(layer, settings.echo ? echoFor(this.lang) : null);
+      } catch (e) { /* đã hủy do cuộn đi chỗ khác */ }
+    }
+
+    async pageText(p) {
+      if (this.textCache.has(p)) return this.textCache.get(p);
+      try {
+        const page = await this.doc.getPage(p + 1);
+        const t = tcToString(await page.getTextContent());
+        this.textCache.set(p, t); return t;
+      } catch (e) { return ""; }
+    }
+
+    drawHighlights() {
+      for (const i of this.hlPages) { const el = this.pageEls[i]; if (el) el.querySelector(".hl").replaceChildren(); }
+      this.hlPages.clear();
+      if (!this.fileSig || !this.pageEls.length) return;
+      for (const it of store.all()) {
+        if (it.sig !== this.fileSig) continue;
+        const el = this.pageEls[it.page]; if (!el) continue;
+        const layer = el.querySelector(".hl");
+        for (const r of it.rects || []) {
+          const m = document.createElement("i");
+          m.className = "k-" + kindOf(it); m.dataset.id = it.id;
+          m.style.cssText = "left:" + r[0] * 100 + "%;top:" + r[1] * 100 + "%;width:" + r[2] * 100 + "%;height:" + r[3] * 100 + "%";
+          layer.appendChild(m);
+        }
+        this.hlPages.add(it.page);
+      }
+    }
+
+    refreshEcho() {
+      const ec = settings.echo ? echoFor(this.lang) : null;
+      const key = ec ? ec.key : "";
+      if (key === this.echoKey) return;
+      this.echoKey = key;
+      for (const r of this.rendered.values()) if (r.layer) applyEcho(r.layer, ec);
+    }
+
+    onPageClick(e) {
+      const sel = getSelection();
+      if (sel && !sel.isCollapsed) return;
+      const pageEl = e.target.closest(".page"); if (!pageEl) return;
+      const mark = e.target.closest("mark.echo");
+      if (mark) {
+        const it = findEchoItem(this.lang, mark.textContent);
+        if (it) openCard(it.id, mark.getBoundingClientRect());
+        return;
+      }
+      const pr = pageEl.getBoundingClientRect();
+      const x = (e.clientX - pr.left) / pr.width, y = (e.clientY - pr.top) / pr.height, page = +pageEl.dataset.i;
+      for (const it of store.all()) {
+        if (it.sig !== this.fileSig || it.page !== page) continue;
+        for (const r of it.rects || []) {
+          if (x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3]) {
+            const m = pageEl.querySelector('.hl i[data-id="' + it.id + '"]');
+            openCard(it.id, (m || pageEl).getBoundingClientRect());
+            return;
+          }
+        }
+      }
+    }
+
+    // Cuộn tới vị trí của một mục (khoảng 1/3 khung nhìn) và kéo bên kia theo nếu đang khóa.
+    reveal(it) {
+      if (!this.ready) return null;
+      const p = Math.min(this.tops.length - 1, Math.max(0, it.page));
+      const fy = it.rects && it.rects[0] ? it.rects[0][1] : 0;
+      this.scroller.scrollTop = Math.max(0, this.tops[p] + fy * this.heights[p] - this.scroller.clientHeight * 0.32);
+      this.expected = this.scroller.scrollTop;
+      if (settings.locked && this.peer && this.peer.ready) this.pushTo(this.peer);
+      this.afterScroll(true);
+      const marks = this.pageEls[p].querySelectorAll('.hl i[data-id="' + it.id + '"]');
+      marks.forEach((m) => { m.classList.remove("flash"); void m.offsetWidth; m.classList.add("flash"); });
+      return marks[0] ? marks[0].getBoundingClientRect() : null;
+    }
+  }
+
+  const paneA = new Pane($("paneA"));
+  const paneB = new Pane($("paneB"));
+  paneA.peer = paneB; paneB.peer = paneA;
+  const panes = [paneA, paneB];
+  const paneForSig = (sig) => panes.find((p) => p.fileSig && p.fileSig === sig) || null;
+
+  // Trang tương ứng ở bên kia theo chế độ đồng bộ hiện tại.
+  function mapPage(from, page) {
+    const to = from.peer; if (!to.ready) return -1;
+    const n = to.tops.length, sign = from.key === "A" ? 1 : -1;
+    let p;
+    if (settings.mode === "percent") {
+      const fn = from.tops.length;
+      p = Math.round(((fn > 1 ? page / (fn - 1) : 0) + sign * settings.pctOffset) * (n - 1));
+    } else p = page + sign * settings.offset;
+    return Math.max(0, Math.min(n - 1, p));
+  }
+  async function pagesText(pane, center, limit) {
+    let out = "";
+    for (let p = center - 1; p <= center + 1; p++) {
+      if (p < 0 || p >= pane.tops.length) continue;
+      out += (await pane.pageText(p)) + "\n";
+    }
+    return out.replace(/[ \t]+/g, " ").slice(0, limit);
+  }
+
+  /* ---------------- Chọn chữ trong lớp chữ ---------------- */
+  function layerNodes(layer) {
+    const out = [];
+    const tw = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
+      acceptNode: (n) => (n.nodeType === 3 || n.nodeName === "BR" ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP),
+    });
+    while (tw.nextNode()) out.push(tw.currentNode);
+    return out;
+  }
+  const layerString = (nodes) => nodes.map((n) => (n.nodeType === 3 ? n.data : " ")).join("");
+  function offsetIn(layer, nodes, c, o) {
+    const r = document.createRange(); r.setStart(layer, 0); r.setEnd(c, o);
+    let n = 0;
+    for (const node of nodes) {
+      if (node === c) { n += o; break; }
+      if (!r.intersectsNode(node)) break;
+      n += node.nodeType === 3 ? node.data.length : 1;
+    }
+    return n;
+  }
+  function sentenceAround(text, s, e) {
+    let a = s;
+    while (a > 0 && s - a < 320 && !/[.!?…]/.test(text[a - 1])) a--;
+    let b = e;
+    while (b < text.length && b - e < 320 && !/[.!?…]/.test(text[b])) b++;
+    b = Math.min(text.length, b + 1);
+    while (b < text.length && /["”’)\]]/.test(text[b])) b++;
+    return text.slice(a, b).replace(/\s+/g, " ").trim();
+  }
+  const nodeEl = (n) => (n && n.nodeType === 1 ? n : n && n.parentElement);
+  function currentSel() {
+    const sel = getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+    let range = sel.getRangeAt(0);
+    const sL = nodeEl(range.startContainer) && nodeEl(range.startContainer).closest(".textLayer");
+    const eL = nodeEl(range.endContainer) && nodeEl(range.endContainer).closest(".textLayer");
+    const layer = sL || eL; if (!layer) return null;
+    const nodes = layerNodes(layer);
+    const texts = nodes.filter((n) => n.nodeType === 3);
+    if (!texts.length) return null;
+    if (sL !== layer || eL !== layer) {
+      range = range.cloneRange();
+      if (sL !== layer) range.setStart(texts[0], 0);
+      if (eL !== layer) { const t = texts[texts.length - 1]; range.setEnd(t, t.data.length); }
+    }
+    const full = layerString(nodes);
+    const s = offsetIn(layer, nodes, range.startContainer, range.startOffset);
+    const e = offsetIn(layer, nodes, range.endContainer, range.endOffset);
+    if (e <= s) return null;
+    const term = full.slice(s, e).replace(/\s+/g, " ").trim()
+      .replace(/^[\s"“‘'(\[—–-]+/, "").replace(/[\s"”’'),.;:!?\]—–-]+$/, "");
+    if (!term) return null;
+    const pageEl = layer.parentElement;
+    const pane = pageEl.closest("#paneA") ? paneA : paneB;
+    return { range, pageEl, pane, page: +pageEl.dataset.i, term, ctx: sentenceAround(full, s, e), rect: range.getBoundingClientRect() };
+  }
+  function rangeRects(range, pageEl) {
+    const pr = pageEl.getBoundingClientRect();
+    const rs = [];
+    for (const r of range.getClientRects()) {
+      if (r.width < 1 || r.height < 2) continue;
+      rs.push({ x: (r.left - pr.left) / pr.width, y: (r.top - pr.top) / pr.height, w: r.width / pr.width, h: r.height / pr.height });
+    }
+    rs.sort((a, b) => a.y - b.y || a.x - b.x);
+    const lines = [];
+    for (const r of rs) {
+      const L = lines.find((l) => Math.abs((l.y + l.h / 2) - (r.y + r.h / 2)) < Math.max(l.h, r.h) * 0.5
+        && r.x <= l.x + l.w + r.h && r.x + r.w >= l.x - r.h);
+      if (L) {
+        const x1 = Math.min(L.x, r.x), y1 = Math.min(L.y, r.y), x2 = Math.max(L.x + L.w, r.x + r.w), y2 = Math.max(L.y + L.h, r.y + r.h);
+        L.x = x1; L.y = y1; L.w = x2 - x1; L.h = y2 - y1;
+      } else lines.push(Object.assign({}, r));
+    }
+    const rd = (v) => Math.round(Math.min(1, Math.max(0, v)) * 1e4) / 1e4;
+    return lines.slice(0, 40).map((l) => [rd(l.x - 0.002), rd(l.y - l.h * 0.08), rd(l.w + 0.004), rd(l.h * 1.16)]);
+  }
+
+  /* ---------------- Thanh bôi ---------------- */
+  const seltool = $("seltool");
+  let lastSel = null, pointerIsDown = false, selTimer = 0;
+  KINDS.forEach((k, idx) => {
+    seltool.append(h("button", { class: "k-" + k.key, dataset: { kind: k.key }, title: k.label + " (" + (idx + 1) + ")" },
+      h("span", { class: "dot" }), k.label, h("kbd", { text: String(idx + 1) })));
+  });
+  seltool.append(h("span", { class: "sep" }));
+  seltool.append(h("button", { id: "selExplain", title: "Lưu và chép prompt giải nghĩa (E)" }, "Chép prompt"));
+  const selSpeak = h("button", { id: "selSpeak", title: "Đọc to" }, "Đọc");
+  if (speakOK) seltool.append(selSpeak);
+  seltool.addEventListener("pointerdown", (e) => e.preventDefault());
+  seltool.addEventListener("mousedown", (e) => e.preventDefault());
+  seltool.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.kind) saveSelection(b.dataset.kind, false);
+    else if (b.id === "selExplain") saveSelection(lastSel && wordCount(lastSel.term) > 6 ? "grammar" : "vocab", true);
+    else if (b.id === "selSpeak" && lastSel) speak(lastSel.pane.lang === "en" ? lastSel.term : "");
+  });
+  function placeSeltool() {
+    if (!lastSel) return;
+    const r = lastSel.range.getBoundingClientRect();
+    if (!r.width && !r.height) { hideSeltool(); return; }
+    const w = seltool.offsetWidth, hh = seltool.offsetHeight;
+    let left = Math.min(window.innerWidth - w - 8, Math.max(8, r.left + r.width / 2 - w / 2));
+    let top = r.top - hh - 8;
+    if (top < 8) top = r.bottom + 8;
+    seltool.style.left = left + "px"; seltool.style.top = Math.min(window.innerHeight - hh - 8, top) + "px";
+  }
+  function hideSeltool() { seltool.hidden = true; lastSel = null; }
+  function updateSeltool() {
+    if (!$("review").hidden || pointerIsDown) return;
+    const s = currentSel();
+    if (!s) { hideSeltool(); return; }
+    lastSel = s;
+    selSpeak.hidden = s.pane.lang !== "en";
+    seltool.hidden = false; placeSeltool();
+  }
+  document.addEventListener("selectionchange", () => { clearTimeout(selTimer); selTimer = setTimeout(updateSeltool, 160); });
+  document.addEventListener("pointerdown", (e) => {
+    pointerIsDown = true;
+    const c = $("card");
+    if (!c.hidden && !c.contains(e.target) && !seltool.contains(e.target) && !e.target.closest(".nb-main, .review, .toast")) closeCard();
+  });
+  document.addEventListener("pointerup", () => {
+    pointerIsDown = false;
+    document.querySelectorAll(".textLayer.selecting").forEach((l) => l.classList.remove("selecting"));
+    clearTimeout(selTimer); selTimer = setTimeout(updateSeltool, 30);
+  });
+  document.addEventListener("pointercancel", () => { pointerIsDown = false; });
+
+  function saveSelection(kind, thenExplain) {
+    const s = lastSel && lastSel.range ? lastSel : currentSel();
+    if (!s || !s.pane.fileSig) return;
+    const anchor = s.range.getBoundingClientRect();
+    const low = s.term.toLowerCase();
+    const dup = store.all().find((it) => it.sig === s.pane.fileSig && it.page === s.page && it.text.toLowerCase() === low);
+    let id;
+    if (dup) {
+      id = dup.id;
+      if (dup.kind !== kind && !thenExplain) store.patch(id, { kind });
+    } else {
+      const it = {
+        id: uid(), sig: s.pane.fileSig, book: s.pane.fileName, lang: s.pane.lang, page: s.page,
+        rects: rangeRects(s.range, s.pageEl), text: s.term.slice(0, 600), ctx: s.ctx.slice(0, 800),
+        kind, meaning: "", note: "", created: Date.now(), srs: { due: Date.now(), ivl: 0, ease: 2.5, reps: 0 },
+      };
+      store.put(it); id = it.id;
+    }
+    try { getSelection().removeAllRanges(); } catch (e) { /* bỏ qua */ }
+    hideSeltool();
+    openCard(id, anchor);
+    if (thenExplain) copyPromptFor(id);
+  }
+
+  /* ---------------- Thẻ chi tiết ---------------- */
+  const card = $("card");
+  let cardId = null, delArmed = 0, aiBusy = new Map(), aiErr = new Map();
+  const cKinds = $("cKinds");
+  KINDS.forEach((k) => cKinds.append(h("button", { class: "chip k-" + k.key, dataset: { kind: k.key }, "aria-pressed": "false" }, h("span", { class: "dot" }), k.label)));
+  cKinds.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-kind]"); if (!b || !cardId) return;
+    store.patch(cardId, { kind: b.dataset.kind });
+  });
+  function openCard(id, anchor) {
+    const it = store.get(id); if (!it) return;
+    cardId = id; delArmed = 0;
+    card.hidden = false;
+    fillCard(it, true);
+    const narrow = window.matchMedia("(max-width: 760px)").matches;
+    card.classList.toggle("sheet", narrow);
+    if (!narrow) {
+      const w = card.offsetWidth, hh = card.offsetHeight;
+      const right = settings.nbOpen ? drawer.getBoundingClientRect().left : window.innerWidth;
+      let left, top;
+      if (anchor) {
+        left = Math.min(right - w - 8, Math.max(8, anchor.left));
+        top = anchor.bottom + 10;
+        if (top + hh > window.innerHeight - 8) top = anchor.top - hh - 10;
+        if (top < 8) top = Math.max(8, window.innerHeight - hh - 8);
+      } else {
+        left = window.innerWidth - w - (settings.nbOpen ? 380 : 16); top = 64;
+      }
+      card.style.left = Math.max(8, left) + "px"; card.style.top = Math.max(8, top) + "px";
+    }
+  }
+  function closeCard() { card.hidden = true; cardId = null; }
+  function refreshCard() { if (cardId) { const it = store.get(cardId); if (it) fillCard(it, false); else closeCard(); } }
+  function aiRow(label, value) {
+    if (!value) return null;
+    return h("div", { class: "row" }, h("span", { text: label }), h("span", null, value));
+  }
+  function fillCard(it, first) {
+    const isEn = it.lang === "en", ai = it.ai || {};
+    const term = $("cTerm");
+    term.textContent = it.text; term.classList.toggle("long", wordCount(it.text) > 8);
+    const enTerm = enTermOf(it);
+    $("cSpeak").hidden = !speakOK || !enTerm;
+    const sub = $("cSub"); sub.replaceChildren();
+    if (ai.ipa) sub.append(h("span", { class: "ipa", text: ai.ipa }));
+    if (ai.pos) sub.append(h("span", { text: ai.pos }));
+    sub.hidden = !sub.childNodes.length;
+    for (const b of cKinds.children) b.setAttribute("aria-pressed", String(b.dataset.kind === kindOf(it)));
+    $("cMeaningLabel").textContent = isEn ? "Nghĩa" : "Bản gốc tiếng Anh";
+    $("cMeaning").placeholder = isEn ? "Tự ghi nghĩa, hoặc dùng Chép prompt rồi Dán kết quả" : "Cụm tiếng Anh tương ứng, hoặc dùng Chép prompt";
+    const mEl = $("cMeaning"), nEl = $("cNote");
+    if (first || document.activeElement !== mEl) mEl.value = it.meaning || "";
+    if (first || document.activeElement !== nEl) nEl.value = it.note || "";
+
+    const box = $("cAi"); box.replaceChildren();
+    if (it.ai) {
+      const rows = isEn
+        ? [ai.meaning !== it.meaning && aiRow("AI gợi ý", ai.meaning), aiRow("Sắc thái", ai.explain), aiRow("Bản dịch sách", ai.book ? "“" + ai.book + "”" : "")]
+        : [aiRow("Nghĩa", ai.meaning), aiRow("Câu gốc", ai.en_ctx ? "“" + ai.en_ctx + "”" : ""), aiRow("Sắc thái", ai.explain),
+          ai.en && !ai.found && aiRow("Lưu ý", "Không thấy trong trích đoạn bản gốc; đây là cách nói gợi ý.")];
+      rows.push(ai.collocations && ai.collocations.length ? aiRow("Hay đi với", ai.collocations.join(" · ")) : null);
+      rows.push(ai.ex_en ? aiRow("Ví dụ", h("span", null, h("i", { text: ai.ex_en }), ai.ex_vi ? h("br") : null, ai.ex_vi ? h("span", { class: "muted", text: ai.ex_vi }) : null)) : null);
+      box.append(...rows.filter(Boolean));
+    }
+    fillBold($("cCtx"), it.ctx, it.text);
+    $("cCtx").hidden = !it.ctx;
+
+    $("cCopy").textContent = it.ai ? "Chép prompt (giải nghĩa lại)" : isEn ? "Chép prompt giải nghĩa" : "Chép prompt tìm bản gốc";
+    if (first) preparePrompt(it);
+    const dict = $("cDict"); dict.replaceChildren();
+    if (enTerm && wordCount(enTerm) <= 5) {
+      const q = encodeURIComponent(enTerm.toLowerCase());
+      dict.append(
+        h("a", { href: "https://dictionary.cambridge.org/search/direct/?datasetsearch=english&q=" + q, target: "_blank", rel: "noopener", text: "Cambridge" }),
+        h("a", { href: "https://www.oxfordlearnersdictionaries.com/search/english/?q=" + q, target: "_blank", rel: "noopener", text: "Oxford" }),
+        h("a", { href: "https://youglish.com/pronounce/" + q + "/english", target: "_blank", rel: "noopener", text: "YouGlish" }));
+    }
+    const pane = paneForSig(it.sig);
+    $("cMeta").textContent = (pane ? "" : it.book + " · ") + LANG_LABEL[it.lang] + " · tr. " + (it.page + 1) + (dueLabel(it) ? " · " + dueLabel(it) : "");
+    $("cDelete").textContent = delArmed ? "Bấm lần nữa để xóa" : "Xóa";
+  }
+  $("cClose").addEventListener("click", closeCard);
+  $("cSpeak").addEventListener("click", () => { const it = store.get(cardId); if (it) speak(enTermOf(it)); });
+  $("cCopy").addEventListener("click", () => { if (cardId) copyPromptFor(cardId); });
+  $("cPaste").addEventListener("click", () => openPaste(cardId));
+  $("cDelete").addEventListener("click", () => {
+    if (!cardId) return;
+    if (!delArmed) { delArmed = setTimeout(() => { delArmed = 0; refreshCard(); }, 3000); refreshCard(); return; }
+    clearTimeout(delArmed); delArmed = 0;
+    const id = cardId; closeCard(); store.remove(id); toast("Đã xóa khỏi sổ từ.");
+  });
+  // Ghi khi dừng gõ hoặc rời ô, không ghi theo từng phím.
+  function bindField(el, field) {
+    let t = 0;
+    const commit = () => {
+      clearTimeout(t);
+      const it = cardId && store.get(cardId);
+      if (it && (it[field] || "") !== el.value) store.patch(it.id, { [field]: el.value.slice(0, 2000) });
+    };
+    el.addEventListener("input", () => { clearTimeout(t); t = setTimeout(commit, 900); });
+    el.addEventListener("change", commit);
+    el.addEventListener("blur", commit);
+  }
+  bindField($("cMeaning"), "meaning");
+  bindField($("cNote"), "note");
+
+  /* ---------------- Giải nghĩa qua AI chat bên ngoài: chép prompt → dán kết quả ---------------- */
+  function buildPrompt(it, other) {
+    const kind = KIND[kindOf(it)].label;
+    if (it.lang === "en") {
+      return [
+        "Bạn là gia sư tiếng Anh cho người Việt đang đọc một cuốn sách song ngữ (bản gốc tiếng Anh và bản dịch tiếng Việt).",
+        "Người học vừa đánh dấu trong bản tiếng Anh: «" + it.text + "»",
+        "Loại đánh dấu: " + kind + ".",
+        "Câu chứa nó: «" + (it.ctx || it.text) + "»",
+        other ? "Trích bản dịch tiếng Việt ở khoảng trang tương ứng (có thể lệch vài đoạn, có thể không chứa đúng đoạn này):\n\"\"\"\n" + other + "\n\"\"\"" : "Không có bản dịch tiếng Việt kèm theo.",
+        "Chỉ trả lời bằng một khối JSON duy nhất (một object, không thêm giải thích) với các khóa:",
+        '"id": "' + it.id + '" (giữ nguyên chuỗi này).',
+        '"ipa": phiên âm IPA giọng Mỹ của phần được đánh dấu, dạng "/.../"; để "" nếu dài hơn 6 từ.',
+        '"pos": từ loại hoặc loại cấu trúc bằng tiếng Việt, rất ngắn (vd "động từ", "cụm động từ", "thành ngữ", "mệnh đề quan hệ").',
+        '"meaning": nghĩa tiếng Việt đúng trong ngữ cảnh này, tối đa 12 từ.',
+        '"explain": 1–2 câu tiếng Việt về sắc thái, cách dùng hoặc cấu trúc ngữ pháp; nếu là cấu trúc, nêu công thức.',
+        '"book_vi": nguyên văn cụm hoặc câu tương ứng trong trích đoạn bản dịch nếu tìm thấy, ngược lại "".',
+        '"collocations": mảng tối đa 3 kết hợp từ tiếng Anh thường gặp với nó.',
+        '"example_en": một câu ví dụ mới, tự nhiên, ngắn.',
+        '"example_vi": bản dịch câu ví dụ.',
+      ].join("\n");
+    }
+    return [
+      "Bạn là gia sư tiếng Anh cho người Việt đang đọc một cuốn sách song ngữ (bản gốc tiếng Anh và bản dịch tiếng Việt).",
+      "Người học vừa đánh dấu trong bản dịch tiếng Việt: «" + it.text + "»",
+      "Câu chứa nó: «" + (it.ctx || it.text) + "»",
+      other ? "Trích bản gốc tiếng Anh ở khoảng trang tương ứng (có thể lệch vài đoạn):\n\"\"\"\n" + other + "\n\"\"\"" : "Không có bản gốc tiếng Anh kèm theo.",
+      "Người học muốn biết bản gốc tiếng Anh diễn đạt ý này thế nào. Chỉ trả lời bằng một khối JSON duy nhất (một object, không thêm giải thích) với các khóa:",
+      '"id": "' + it.id + '" (giữ nguyên chuỗi này).',
+      '"en": nguyên văn cụm tiếng Anh tương ứng trong trích đoạn bản gốc nếu tìm thấy; nếu không thấy, cách nói tiếng Anh tự nhiên nhất.',
+      '"found": true nếu "en" được trích từ bản gốc, false nếu là gợi ý.',
+      '"en_ctx": nguyên văn câu tiếng Anh chứa cụm đó nếu tìm thấy, ngược lại "".',
+      '"ipa": phiên âm IPA giọng Mỹ của "en", dạng "/.../"; để "" nếu dài hơn 6 từ.',
+      '"pos": từ loại hoặc loại cấu trúc của "en" bằng tiếng Việt, rất ngắn.',
+      '"meaning": nghĩa tiếng Việt ngắn của "en", tối đa 12 từ.',
+      '"explain": 1–2 câu tiếng Việt về sắc thái hoặc vì sao người dịch chọn cách dịch đó.',
+      '"collocations": mảng tối đa 3 kết hợp từ tiếng Anh thường gặp với "en".',
+      '"example_en": một câu ví dụ mới, tự nhiên, ngắn dùng "en".',
+      '"example_vi": bản dịch câu ví dụ.',
+    ].join("\n");
+  }
+  function buildBatchPrompt(list) {
+    return [
+      "Bạn là gia sư tiếng Anh cho người Việt đang đọc một cuốn sách song ngữ (bản gốc tiếng Anh và bản dịch tiếng Việt).",
+      "Dưới đây là các mục người học đã đánh dấu, mỗi dòng một mục: id, ban (en = bôi trong bản gốc tiếng Anh, vi = bôi trong bản dịch tiếng Việt), cum (phần đã bôi), cau (câu chứa nó).",
+      ...list.map((it) => JSON.stringify({ id: it.id, ban: it.lang, cum: it.text, cau: it.ctx || it.text })),
+      "Chỉ trả lời bằng đúng một mảng JSON, mỗi phần tử ứng với một mục, giữ nguyên \"id\", với các khóa:",
+      '"id"; "ipa": phiên âm IPA giọng Mỹ của cụm tiếng Anh (với mục vi là của "en"), dạng "/.../", để "" nếu dài hơn 6 từ;',
+      '"pos": từ loại hoặc loại cấu trúc bằng tiếng Việt, rất ngắn; "meaning": nghĩa tiếng Việt đúng trong câu đó, tối đa 12 từ;',
+      '"explain": 1–2 câu tiếng Việt về sắc thái, cách dùng hoặc cấu trúc ngữ pháp; "collocations": mảng tối đa 3 kết hợp từ tiếng Anh thường gặp;',
+      '"example_en": một câu ví dụ mới, tự nhiên, ngắn; "example_vi": bản dịch câu ví dụ;',
+      'riêng mục ban = vi: thêm "en": cách nói tiếng Anh tự nhiên nhất cho cụm đó, "found": false, "en_ctx": "".',
+    ].join("\n");
+  }
+  const promptCache = new Map();
+  async function buildPromptFor(it) {
+    const pane = paneForSig(it.sig);
+    let other = "";
+    if (pane && pane.peer.ready) other = await pagesText(pane.peer, mapPage(pane, it.page), 6000);
+    return buildPrompt(it, other);
+  }
+  // Dựng sẵn prompt khi mở thẻ để lúc bấm Chép là chép ngay (Safari chỉ cho chép trong lúc còn thao tác của người dùng).
+  function preparePrompt(it) {
+    const key = it.id + ":" + (it.upd || 0) + ":" + settings.offset + settings.mode;
+    if (promptCache.has(it.id) && promptCache.get(it.id).key === key) return;
+    buildPromptFor(it).then((text) => promptCache.set(it.id, { key, text })).catch(() => {});
+  }
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* thử cách cũ */ }
+    try {
+      const ta = h("textarea", { style: "position:fixed;top:-1000px;opacity:0" }); ta.value = text;
+      document.body.append(ta); ta.select(); const ok = document.execCommand("copy"); ta.remove(); return ok;
+    } catch (e) { return false; }
+  }
+  async function copyPromptFor(id) {
+    const it = store.get(id); if (!it) return;
+    const c = promptCache.get(id);
+    const text = c ? c.text : await buildPromptFor(it);
+    if (await copyText(text)) toast("Đã chép prompt. Dán vào ChatGPT, Claude hoặc Gemini, chép câu trả lời rồi bấm Dán kết quả.");
+    else { openPaste(id); $("pasteBox").value = text; $("pasteMsg").textContent = "Trình duyệt chặn chép tự động. Đây là prompt: chọn hết, chép, rồi xóa ô và dán câu trả lời vào."; }
+  }
+  function parseAi(text) {
+    let t = String(text || "").trim();
+    const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence) t = fence[1].trim();
+    try { return JSON.parse(t); } catch (e) { /* thử cắt khối */ }
+    const a = t.search(/[[{]/), b = Math.max(t.lastIndexOf("]"), t.lastIndexOf("}"));
+    if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { /* bỏ qua */ } }
+    return null;
+  }
+  function aiFrom(r) {
+    return {
+      ipa: str(r.ipa), pos: str(r.pos), meaning: str(r.meaning), explain: str(r.explain),
+      book: str(r.book_vi), en: str(r.en), found: r.found === true, en_ctx: str(r.en_ctx),
+      collocations: Array.isArray(r.collocations) ? r.collocations.map(str).filter(Boolean).slice(0, 3) : [],
+      ex_en: str(r.example_en), ex_vi: str(r.example_vi), at: Date.now(),
+    };
+  }
+  function applyAi(data, fallbackId) {
+    const arr = Array.isArray(data) ? data : [data];
+    const updates = []; let miss = 0;
+    for (const r of arr) {
+      if (!r || typeof r !== "object") { miss++; continue; }
+      const id = typeof r.id === "string" && store.get(r.id) ? r.id : arr.length === 1 ? fallbackId : null;
+      const cur = id && store.get(id);
+      if (!cur) { miss++; continue; }
+      const ai = aiFrom(r);
+      const fields = { ai };
+      if (!str(cur.meaning)) fields.meaning = cur.lang === "en" ? ai.meaning : (ai.en || ai.meaning);
+      updates.push(Object.assign({}, cur, fields));
+    }
+    if (updates.length) store.putMany(updates);
+    return { ok: updates.length, miss };
+  }
+  const pasteDlg = $("pasteDlg");
+  let pasteFallback = null;
+  function openPaste(fallbackId) {
+    pasteFallback = fallbackId || null;
+    const it = fallbackId && store.get(fallbackId);
+    $("pasteTitle").textContent = it ? "Dán kết quả cho “" + (it.text.length > 40 ? it.text.slice(0, 40) + "…" : it.text) + "”" : "Dán câu trả lời của AI";
+    $("pasteBox").value = ""; $("pasteMsg").textContent = ""; $("pasteMsg").className = "small";
+    pasteDlg.hidden = false; hideSeltool();
+    setTimeout(() => $("pasteBox").focus(), 30);
+  }
+  const closePaste = () => { pasteDlg.hidden = true; };
+  $("pasteClose").addEventListener("click", closePaste);
+  pasteDlg.addEventListener("click", (e) => { if (e.target === pasteDlg) closePaste(); });
+  $("pasteRead").addEventListener("click", async () => {
+    try { $("pasteBox").value = await navigator.clipboard.readText(); }
+    catch (e) { $("pasteMsg").textContent = "Trình duyệt không cho đọc bộ nhớ tạm. Bấm vào ô rồi nhấn Ctrl+V (⌘V trên Mac)."; }
+  });
+  $("pasteApply").addEventListener("click", () => {
+    const msg = $("pasteMsg");
+    const data = parseAi($("pasteBox").value);
+    if (!data || typeof data !== "object") { msg.className = "small msg-err"; msg.textContent = "Không tìm thấy khối JSON hợp lệ. Chép lại toàn bộ câu trả lời rồi dán vào."; return; }
+    const r = applyAi(data, pasteFallback);
+    if (!r.ok) { msg.className = "small msg-err"; msg.textContent = "Không khớp mục nào trong sổ từ. Kiểm tra AI có giữ nguyên các \"id\" không."; return; }
+    closePaste();
+    toast("Đã cập nhật " + r.ok + " mục" + (r.miss ? ", bỏ qua " + r.miss + " mục không khớp." : "."));
+  });
+  $("nbCopy").addEventListener("click", async () => {
+    const list = pendingAi().slice(0, 15);
+    if (!list.length) { toast("Mọi từ trong phạm vi đang xem đều đã có giải nghĩa."); return; }
+    if (await copyText(buildBatchPrompt(list))) toast("Đã chép prompt cho " + list.length + " mục. Dán vào AI chat, chép câu trả lời rồi bấm Dán kết quả.");
+    else toast("Trình duyệt chặn chép tự động.");
+  });
+  $("nbPaste").addEventListener("click", () => openPaste(null));
+  const pendingAi = () => scopedItems().filter((it) => !it.ai && it.kind !== "quote").sort((a, b) => a.created - b.created);
+
+  /* ---------------- Sổ từ ---------------- */
+  const drawer = $("drawer");
+  const nbKinds = $("nbKinds");
+  [{ key: "all", label: "Tất cả" }, ...KINDS, { key: "due", label: "Đến hạn ôn" }].forEach((k) => {
+    nbKinds.append(h("button", { class: "chip" + (KIND[k.key] ? " k-" + k.key : ""), dataset: { f: k.key }, "aria-pressed": "false" },
+      KIND[k.key] ? h("span", { class: "dot" }) : null, k.label));
+  });
+  nbKinds.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-f]"); if (!b) return;
+    settings.nbKind = b.dataset.f; renderNotebook(); saveSoon();
+  });
+  $("nbSearch").addEventListener("input", renderNotebook);
+  $("nbScope").addEventListener("change", (e) => { settings.nbScope = e.target.value; renderNotebook(); saveSoon(); });
+  $("nbSort").addEventListener("change", (e) => { settings.nbSort = e.target.value; renderNotebook(); saveSoon(); });
+  $("nbClose").addEventListener("click", () => toggleNotebook(false));
+  $("nbBtn").addEventListener("click", () => toggleDrawer("nb"));
+  $("libBtn").addEventListener("click", () => toggleDrawer("lib"));
+  $("tabNb").addEventListener("click", () => toggleDrawer("nb", true));
+  $("tabLib").addEventListener("click", () => toggleDrawer("lib", true));
+  function toggleDrawer(tab, keepOpen) {
+    if (settings.nbOpen && settings.tab === tab && !keepOpen) settings.nbOpen = false;
+    else { settings.nbOpen = true; settings.tab = tab; }
+    applyDrawer(); renderNotebook(); renderLibrary(); saveSoon();
+  }
+  function toggleNotebook(force) {
+    settings.nbOpen = force === undefined ? !settings.nbOpen : force;
+    applyDrawer(); renderNotebook(); renderLibrary(); saveSoon();
+  }
+  function applyDrawer() {
+    drawer.hidden = !settings.nbOpen;
+    const lib_ = settings.tab === "lib";
+    $("nbPanel").hidden = lib_; $("libPanel").hidden = !lib_;
+    $("tabNb").setAttribute("aria-selected", String(!lib_)); $("tabLib").setAttribute("aria-selected", String(lib_));
+    $("nbBtn").setAttribute("aria-pressed", String(settings.nbOpen && !lib_));
+    $("libBtn").setAttribute("aria-pressed", String(settings.nbOpen && lib_));
+  }
+  const openSigs = () => panes.map((p) => p.fileSig).filter(Boolean);
+  function scopedItems() {
+    const sigs = openSigs();
+    if (settings.nbScope === "open" && sigs.length) return store.all().filter((it) => sigs.includes(it.sig));
+    return store.all();
+  }
+  function renderNotebook() {
+    updateBadges();
+    if (drawer.hidden || settings.tab === "lib") return;
+    $("nbScope").value = settings.nbScope; $("nbSort").value = settings.nbSort;
+    for (const b of nbKinds.children) b.setAttribute("aria-pressed", String(b.dataset.f === settings.nbKind));
+    const q = $("nbSearch").value.trim().toLowerCase();
+    const now = Date.now();
+    let list = scopedItems();
+    const total = list.length;
+    if (settings.nbKind === "due") list = list.filter((it) => reviewable(it) && it.srs && it.srs.due <= now);
+    else if (settings.nbKind !== "all") list = list.filter((it) => kindOf(it) === settings.nbKind);
+    if (q) list = list.filter((it) => [it.text, it.meaning, it.note, it.ctx, it.ai && it.ai.en].some((v) => v && v.toLowerCase().includes(q)));
+    if (settings.nbSort === "new") list.sort((a, b) => b.created - a.created);
+    else if (settings.nbSort === "due") list.sort((a, b) => (a.srs ? a.srs.due : 0) - (b.srs ? b.srs.due : 0));
+    else list.sort((a, b) => a.sig.localeCompare(b.sig) || a.lang.localeCompare(b.lang) || a.page - b.page || ((a.rects[0] || [0, 0])[1] - (b.rects[0] || [0, 0])[1]));
+    $("nbSummary").textContent = total ? (list.length === total ? total + " mục" : list.length + " / " + total + " mục") : "";
+    const pend = pendingAi().length;
+    $("nbCopy").textContent = pend ? "Chép prompt cho " + Math.min(15, pend) + " mục chưa giải nghĩa" : "Chép prompt giải nghĩa";
+    const ul = $("nbList"); ul.replaceChildren();
+    if (!list.length) {
+      ul.append(h("li", { class: "nb-empty" },
+        h("strong", { text: total ? "Không có mục nào khớp bộ lọc." : "Chưa lưu từ nào." }),
+        total ? "Đổi bộ lọc hoặc ô tìm kiếm." : "Bôi một từ hoặc cụm từ trên trang PDF, rồi chọn Từ mới, Cụm từ, Cấu trúc hoặc Câu hay."));
+      return;
+    }
+    const showBook = settings.nbScope === "all" || !openSigs().length;
+    const frag = document.createDocumentFragment();
+    for (const it of list.slice(0, 600)) {
+      const ctx = h("span", { class: "nb-ctx" }); fillBold(ctx, it.ctx, it.text);
+      const due = dueLabel(it);
+      frag.append(h("li", { class: "nb-item" }, h("button", { class: "nb-main k-" + kindOf(it), dataset: { id: it.id } },
+        h("span", { class: "dot" }),
+        h("span", { class: "nb-term" }, it.text, it.ai && it.ai.ipa && wordCount(it.text) <= 4 ? h("span", { class: "ipa", text: it.ai.ipa }) : null),
+        h("span", { class: "nb-mean" + (it.meaning ? "" : " none"), text: it.meaning || "Chưa có nghĩa" }),
+        it.ctx ? ctx : null,
+        h("span", { class: "nb-meta" }, (showBook ? it.book + " · " : "") + LANG_LABEL[it.lang] + " · tr. " + (it.page + 1),
+          due ? " · " : "", due ? h("span", { class: due === "đến hạn ôn" ? "due" : "", text: due }) : null))));
+    }
+    ul.append(frag);
+  }
+  $("nbList").addEventListener("click", (e) => {
+    const b = e.target.closest(".nb-main"); if (!b) return;
+    goTo(b.dataset.id);
+  });
+  function goTo(id) {
+    const it = store.get(id); if (!it) return;
+    const pane = paneForSig(it.sig);
+    const narrow = window.matchMedia("(max-width: 760px)").matches;
+    if (narrow && settings.nbOpen) toggleNotebook(false);
+    let rect = null;
+    if (pane) rect = pane.reveal(it);
+    else toast("Mở file “" + it.book + "” ở bên " + LANG_LABEL[it.lang] + " để xem chỗ này trong sách.");
+    openCard(id, rect);
+  }
+
+  /* ---------------- Xuất / nhập ---------------- */
+  function rowsFor(items) {
+    return items.map((it) => [it.lang === "en" ? it.text : enTermOf(it) || it.text, it.lang === "en" ? it.meaning || "" : it.text,
+      (it.ai && it.ai.ipa) || "", KIND[kindOf(it)].label, it.lang === "en" ? it.ctx || "" : (it.ai && it.ai.en_ctx) || it.ctx || "",
+      it.book, String(it.page + 1), it.note || "", LANG_LABEL[it.lang]]);
+  }
+  const HEAD = ["Tiếng Anh", "Nghĩa / Tiếng Việt", "IPA", "Loại", "Ngữ cảnh", "Sách", "Trang", "Ghi chú", "Bôi ở bản"];
+  const csvCell = (v) => '"' + String(v).replace(/"/g, '""') + '"';
+  function offerFile(filename, data, clipText, okMsg) {
+    try {
+      const type = filename.endsWith(".csv") ? "text/csv;charset=utf-8" : "application/json";
+      const url = URL.createObjectURL(new Blob([data], { type }));
+      const a = h("a", { href: url, download: filename, style: "display:none" });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast(okMsg);
+    } catch (e) { toast("Không tải file được."); }
+  }
+  $("exportCsv").addEventListener("click", () => {
+    const items = scopedItems().sort((a, b) => a.created - b.created);
+    if (!items.length) { toast("Sổ từ đang trống."); return; }
+    const rows = rowsFor(items);
+    const csv = "﻿" + [HEAD, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    const tsv = rows.map((r) => r.map((c) => String(c).replace(/[\t\r\n]+/g, " ")).join("\t")).join("\n");
+    offerFile("so-tu-song-ngu.csv", csv, tsv, "Đã tải file CSV. Trong Anki: File → Import, chọn dấu phẩy làm phân cách.");
+  });
+  $("exportAll").addEventListener("click", () => {
+    const items = store.all().map((it) => Object.assign(store.clean(it), { id: it.id }));
+    const books = Object.keys(lib.books).length;
+    if (!items.length && !books) { toast("Chưa có gì để sao lưu."); return; }
+    const json = JSON.stringify({ app: "doc-song-ngu", v: 2, exported: new Date().toISOString(), items,
+      library: { books: lib.books, session: lib.session }, settings }, null, 1);
+    offerFile("doc-song-ngu-" + new Date().toISOString().slice(0, 10) + ".json", json, json,
+      "Đã lưu bản sao lưu: " + items.length + " mục sổ từ, " + books + " sách. File PDF không nằm trong bản sao lưu.");
+  });
+  $("importAll").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      const arr = Array.isArray(data) ? data : data.items || [];
+      if (!Array.isArray(arr)) throw 0;
+      const ok = arr.filter((x) => x && typeof x.id === "string" && /^[A-Za-z0-9_.~:@+-]{1,64}$/.test(x.id) && typeof x.text === "string" && typeof x.sig === "string" && Number.isInteger(x.page));
+      const fresh = ok.filter((x) => !store.get(x.id)).map((x) => Object.assign({ rects: [], ctx: "", meaning: "", note: "", kind: "vocab", lang: "en", created: Date.now(), srs: { due: Date.now(), ivl: 0, ease: 2.5, reps: 0 } }, x));
+      if (fresh.length) store.putMany(fresh);
+      const nb = data.library ? lib.importData(data.library) : 0;
+      toast(fresh.length || nb ? "Đã nhập " + fresh.length + " mục sổ từ và " + nb + " sách." : "Không có gì mới trong file này.");
+    } catch (err) { toast("File này không phải bản sao lưu của trang Đọc song ngữ."); }
+  });
+  $("optMarks").addEventListener("change", (e) => { settings.marks = e.target.checked; applySettings(); saveSoon(); });
+  $("optEcho").addEventListener("change", (e) => { settings.echo = e.target.checked; applySettings(); panes.forEach((p) => p.refreshEcho()); saveSoon(); });
+
+  /* ---------------- Ôn tập ---------------- */
+  const reviewEl = $("review");
+  const rv = { queue: [], idx: 0, revealed: false, hint: false, done: 0 };
+  function openReview() {
+    closeCard(); hideSeltool();
+    rv.queue = dueItems().map((x) => x.id); rv.idx = 0; rv.done = 0; rv.revealed = false; rv.hint = false;
+    reviewEl.hidden = false; renderReview();
+  }
+  function closeReview() { reviewEl.hidden = true; updateBadges(); }
+  function clozeFor(it) {
+    if (it.lang !== "en" || !it.ctx || wordCount(it.text) > 6) return null;
+    const i = it.ctx.toLowerCase().indexOf(it.text.toLowerCase());
+    if (i < 0 || it.ctx.length - it.text.length < 12) return null;
+    return [it.ctx.slice(0, i), it.text, it.ctx.slice(i + it.text.length)];
+  }
+  function renderReview() {
+    const body = $("rvBody"), act = $("rvActions");
+    body.replaceChildren(); act.replaceChildren(); act.className = "rv-actions";
+    const it = store.get(rv.queue[rv.idx]);
+    if (!it) {
+      const all = store.all().filter(reviewable);
+      const ahead = all.filter((x) => x.srs && x.srs.due > Date.now()).sort((a, b) => a.srs.due - b.srs.due);
+      $("rvProg").textContent = rv.done ? "Đã ôn " + rv.done + " thẻ" : "Ôn tập";
+      body.append(h("div", { class: "rv-empty" },
+        h("p", { class: "rv-big", text: rv.done ? "Hết thẻ đến hạn. Đọc tiếp thôi." : all.length ? "Chưa có thẻ nào đến hạn." : "Sổ từ chưa có thẻ để ôn." },),
+        h("p", { class: "muted", text: ahead.length ? "Thẻ tiếp theo đến hạn sau " + fmtDur(ahead[0].srs.due - Date.now()) + "." : "Bôi một từ trong sách và chọn Từ mới, Cụm từ hoặc Cấu trúc. Thẻ mới đến hạn ôn ngay." })));
+      act.className = "rv-actions " + (ahead.length ? "two" : "one");
+      if (ahead.length) act.append(h("button", { class: "btn", onclick: () => { rv.queue = ahead.slice(0, 10).map((x) => x.id); rv.idx = 0; rv.revealed = false; renderReview(); }, text: "Ôn trước " + Math.min(10, ahead.length) + " thẻ" }));
+      act.append(h("button", { class: "btn primary", onclick: closeReview, text: "Đóng" }));
+      return;
+    }
+    $("rvProg").textContent = (rv.idx + 1) + " / " + rv.queue.length + (rv.done ? " · đã ôn " + rv.done : "");
+    const ai = it.ai || {}, isEn = it.lang === "en", cz = clozeFor(it);
+    body.append(h("div", { class: "rv-q" }, h("span", { class: "dot k-" + kindOf(it), style: "margin-right:6px;vertical-align:-1px" }),
+      isEn ? (cz ? "Điền từ còn thiếu" : "Nhớ nghĩa") : "Bản gốc tiếng Anh nói thế nào?"));
+    if (!rv.revealed) {
+      if (cz) {
+        body.append(h("p", { class: "rv-sent" }, cz[0], h("span", { class: "blank", style: "width:" + Math.max(3, Math.min(18, it.text.length)) + "ch", text: it.text }), cz[2]));
+        if (rv.hint && it.meaning) body.append(h("div", { class: "rv-hint", text: "Gợi ý: " + it.meaning }));
+      } else if (isEn) {
+        body.append(h("div", { class: "rv-ans", text: it.text }));
+        if (it.ctx && it.ctx !== it.text) { const p = h("p", { class: "rv-sent", style: "font-size:17px" }); fillBold(p, it.ctx, it.text); body.append(p); }
+      } else {
+        const p = h("p", { class: "rv-sent" }); fillBold(p, it.ctx || it.text, it.text); body.append(p);
+      }
+      act.className = "rv-actions two";
+      act.append(h("button", { class: "btn", disabled: !cz || !it.meaning || rv.hint, onclick: () => { rv.hint = true; renderReview(); }, text: "Gợi ý nghĩa" }));
+      act.append(h("button", { class: "btn primary", onclick: reveal }, "Hiện đáp án ", h("kbd", { text: "Space" })));
+      return;
+    }
+    const answer = isEn ? it.text : (it.meaning || ai.en || "Chưa có bản gốc, bấm Tìm trong bản gốc ở thẻ từ");
+    const enT = enTermOf(it);
+    body.append(h("div", { class: "rv-ans", text: answer }));
+    const sub = h("div", { class: "rv-sub" });
+    if (ai.ipa) sub.append(h("span", { class: "ipa", text: ai.ipa }));
+    if (ai.pos) sub.append(h("span", { text: ai.pos }));
+    if (speakOK && enT) sub.append(h("button", { class: "icon-btn", "aria-label": "Phát âm", html: SPEAKER, onclick: () => speak(enT) }));
+    if (sub.childNodes.length) body.append(sub);
+    if (isEn && it.meaning) body.append(h("div", { class: "rv-mean", text: it.meaning }));
+    if (!isEn) body.append(h("div", { class: "rv-mean", text: it.text }));
+    if (ai.explain) body.append(h("div", { class: "muted", text: ai.explain }));
+    const ctxText = isEn ? it.ctx : ai.en_ctx;
+    if (ctxText) { const q = h("blockquote", { class: "ctx" }); fillBold(q, ctxText, isEn ? it.text : ai.en); body.append(q); }
+    if (isEn && ai.book) body.append(h("div", { class: "muted small", text: "Bản dịch trong sách: “" + ai.book + "”" }));
+    if (it.note) body.append(h("div", { class: "small", text: "Ghi chú: " + it.note }));
+    body.append(h("div", { class: "rv-src" }, it.book + " · tr. " + (it.page + 1),
+      h("button", { text: "Mở chỗ này trong sách", onclick: () => { closeReview(); goTo(it.id); } })));
+    [["Quên", 1], ["Khó", 2], ["Nhớ", 3], ["Dễ", 4]].forEach(([label, g]) => {
+      const nx = schedule(it.srs, g);
+      act.append(h("button", { class: "btn rate r" + g + (g === 3 ? " primary" : ""), onclick: () => rate(g) },
+        h("span", null, label, " ", h("kbd", { text: String(g) })), h("small", { text: g === 1 ? "10 phút" : fmtDur(nx.due - Date.now()) })));
+    });
+  }
+  function reveal() { rv.revealed = true; renderReview(); }
+  function rate(g) {
+    const it = store.get(rv.queue[rv.idx]); if (!it) return;
+    store.patch(it.id, { srs: schedule(it.srs, g) });
+    rv.done++;
+    if (g === 1 && rv.queue.indexOf(it.id, rv.idx + 1) < 0) rv.queue.push(it.id);
+    rv.idx++; rv.revealed = false; rv.hint = false; renderReview();
+  }
+  $("reviewBtn").addEventListener("click", openReview);
+  $("rvClose").addEventListener("click", closeReview);
+  reviewEl.addEventListener("click", (e) => { if (e.target === reviewEl) closeReview(); });
+
+  function updateBadges() {
+    const sc = scopedItems().length;
+    $("nbCount").textContent = String(sc);
+    $("dueCount").textContent = String(dueItems().length);
+  }
+  setInterval(updateBadges, 60e3);
+
+  /* ---------------- Điều khiển chung ---------------- */
+  const modeEl = $("mode"), offsetEl = $("offset"), lockEl = $("lock");
+  function applySettings() {
+    modeEl.value = settings.mode;
+    offsetEl.value = settings.offset;
+    $("offsetWrap").hidden = settings.mode !== "page";
+    lockEl.setAttribute("aria-pressed", String(settings.locked));
+    lockEl.title = settings.locked ? "Đang đồng bộ (L để mở khóa)" : "Đã mở khóa (L để khóa lại)";
+    $("zoomLabel").textContent = Math.round(ZOOMS[settings.zoomIdx] * 100) + "%";
+    $("invert").setAttribute("aria-pressed", String(settings.invert));
+    document.body.classList.toggle("invert", settings.invert);
+    document.body.classList.toggle("no-marks", !settings.marks);
+    $("book").classList.toggle("swapped", settings.swapped);
+    $("optMarks").checked = settings.marks; $("optEcho").checked = settings.echo;
+    $("optCloud").checked = settings.cloudPdf;
+    applyDrawer();
+  }
+  function resyncFromA() { if (settings.locked && paneA.ready && paneB.ready) paneA.pushTo(paneB); }
+  function toggleLock() {
+    settings.locked = !settings.locked;
+    if (settings.locked && paneA.ready && paneB.ready) {
+      const a = paneA.getAnchor(), b = paneB.getAnchor();
+      settings.offset = b.page - a.page;
+      settings.pctOffset = b.pct - a.pct;
+    }
+    applySettings(); saveSoon(); lib.touchSession();
+  }
+  lockEl.addEventListener("click", toggleLock);
+  modeEl.addEventListener("change", () => { settings.mode = modeEl.value; settings.pctOffset = 0; applySettings(); resyncFromA(); saveSoon(); lib.touchSession(); });
+  offsetEl.addEventListener("change", () => {
+    settings.offset = parseInt(offsetEl.value, 10) || 0; applySettings(); resyncFromA(); saveSoon(); lib.touchSession();
+  });
+  function zoom(d) {
+    const idx = Math.min(ZOOMS.length - 1, Math.max(0, settings.zoomIdx + d));
+    if (idx === settings.zoomIdx) return;
+    settings.zoomIdx = idx; applySettings();
+    paneA.layout(); paneB.layout(); saveSoon();
+  }
+  $("zoomIn").addEventListener("click", () => zoom(1));
+  $("zoomOut").addEventListener("click", () => zoom(-1));
+  $("invert").addEventListener("click", () => { settings.invert = !settings.invert; applySettings(); saveSoon(); });
+  $("swap").addEventListener("click", () => { settings.swapped = !settings.swapped; applySettings(); saveSoon(); });
+
+  document.addEventListener("keydown", (e) => {
+    if (!pasteDlg.hidden || !ghDlg.hidden) { if (e.key === "Escape") { pasteDlg.hidden = true; ghDlg.hidden = true; } return; }
+    if (e.target.matches("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (!reviewEl.hidden) {
+      if (k === "Escape") { closeReview(); return; }
+      if (!rv.revealed && (k === " " || k === "Enter")) { e.preventDefault(); if (store.get(rv.queue[rv.idx])) reveal(); return; }
+      if (rv.revealed && /^[1-4]$/.test(k)) { e.preventDefault(); rate(+k); }
+      return;
+    }
+    if (!seltool.hidden && lastSel) {
+      if (/^[1-4]$/.test(k)) { e.preventDefault(); saveSelection(KINDS[+k - 1].key, false); return; }
+      if (k === "e" || k === "E") { e.preventDefault(); saveSelection(wordCount(lastSel.term) > 6 ? "grammar" : "vocab", true); return; }
+    }
+    if (k === "Escape") { if (!card.hidden) closeCard(); else if (settings.nbOpen) toggleNotebook(false); return; }
+    if (k === "l" || k === "L") { e.preventDefault(); toggleLock(); }
+    else if (k === "n" || k === "N") { e.preventDefault(); toggleDrawer("nb"); }
+    else if (k === "b" || k === "B") { e.preventDefault(); toggleDrawer("lib"); }
+    else if (k === "r" || k === "R") { e.preventDefault(); openReview(); }
+  });
+
+  let rsTimer = 0;
+  new ResizeObserver(() => {
+    clearTimeout(rsTimer);
+    rsTimer = setTimeout(() => { paneA.layout(); paneB.layout(); }, 120);
+  }).observe($("book"));
+
+  function onBooksChanged() { renderNotebook(); renderLibrary(); panes.forEach((p) => { p.drawHighlights(); p.echoKey = "\u0000"; p.refreshEcho(); }); }
+  store.on(() => {
+    panes.forEach((p) => { p.drawHighlights(); p.refreshEcho(); });
+    renderNotebook(); refreshCard();
+    if (!reviewEl.hidden && !rv.revealed) { /* giữ nguyên thẻ đang hiện */ }
+  });
+
+
+  /* ---------------- Thư viện & lịch sử đọc ----------------
+     books[khóa] = {tên, cỡ, bên, vị trí đọc, repo: PDF đã có trong repo}; session = cặp sách đang mở + độ lệch.
+     Tất cả nằm trên trình duyệt và được gh gộp vào data.json trong repo. */
+  const LS_LIB = "song-ngu:lib:v1";
+  const MAX_PDF = 40 * 1024 * 1024;
+  function hash53(str) {
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < str.length; i++) { const ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+  }
+  const fmtMB = (b) => (b / 1048576).toFixed(b < 10485760 ? 1 : 0) + " MB";
+  const ago = (t) => { const d = Date.now() - t; return d < 60e3 ? "vừa xong" : fmtDur(d) + " trước"; };
+  const lib = {
+    books: {}, session: { A: null, B: null, at: 0, sync: null },
+    timers: new Map(), restoredLocal: false, pendingSession: null,
+    pending: { A: null, B: null }, delArmed: null, localFiles: new Set(),
+    load() {
+      try {
+        const d = JSON.parse(localStorage.getItem(LS_LIB) || "{}");
+        if (d.books && typeof d.books === "object") this.books = d.books;
+        if (d.session) this.session = d.session;
+        if (Array.isArray(d.localFiles)) this.localFiles = new Set(d.localFiles);
+      } catch (e) { /* bỏ qua */ }
+    },
+    // localFiles: sách nào đã có bản PDF trong IndexedDB của máy này (không đồng bộ).
+    saveLocal() { try { localStorage.setItem(LS_LIB, JSON.stringify({ books: this.books, session: this.session, localFiles: [...this.localFiles] })); } catch (e) { /* bỏ qua */ } },
+    key: (sig) => "b" + hash53(sig),
+    bySig(sig) { return sig ? this.books[this.key(sig)] || null : null; },
+    syncSettings: () => ({ mode: settings.mode, offset: settings.offset, pctOffset: settings.pctOffset, locked: settings.locked }),
+    touchSession() {
+      this.session.sync = this.syncSettings();
+      this.session.at = Date.now();
+      this.saveLocal(); gh.schedule();
+    },
+    touch(pane, file, isNew) {
+      const key = this.key(pane.fileSig), now = Date.now();
+      const b = this.books[key] || { sig: pane.fileSig, created: now };
+      Object.assign(b, { name: pane.fileName, size: file.size, side: pane.key, lang: pane.lang, pages: pane.tops.length, at: now });
+      if (!b.pos) b.pos = pane.getAnchor();
+      const other = pane.peer.fileSig ? this.key(pane.peer.fileSig) : null;
+      if (other && this.books[other] && this.books[other].pair !== key) { b.pair = other; this.books[other].pair = key; this.books[other].at = now; }
+      else if (other) b.pair = other;
+      this.books[key] = b;
+      this.session[pane.key] = key; this.session.sync = this.syncSettings(); this.session.at = now;
+      if (!this.localFiles.has(key)) { idbPut("f:" + key, file); this.localFiles.add(key); }
+      this.saveLocal(); gh.schedule(1500);
+      gh.uploadPdf(key, file, isNew);
+      renderLibrary();
+    },
+    savePos(pane) {
+      if (!pane.fileSig) return;
+      const b = this.bySig(pane.fileSig); if (!b) return;
+      const a = pane.getAnchor(); if (!a) return;
+      if (b.pos && b.pos.page === a.page && Math.abs(b.pos.frac - a.frac) < 0.02) return;
+      b.pos = { page: a.page, frac: +a.frac.toFixed(4), pct: +a.pct.toFixed(5) }; b.at = Date.now();
+      clearTimeout(this.timers.get("_local"));
+      this.timers.set("_local", setTimeout(() => { this.saveLocal(); renderLibrary(); }, 600));
+      gh.schedule(8000);
+    },
+    // Áp phiên đọc mới hơn (từ máy khác hoặc bản sao lưu).
+    applySession(s) {
+      this.session = s; this.saveLocal();
+      if (s.sync) {
+        for (const k of ["mode", "offset", "pctOffset", "locked"]) if (s.sync[k] !== undefined) settings[k] = s.sync[k];
+        applySettings();
+      }
+      for (const side of ["A", "B"]) {
+        const key = s[side], b = key && this.books[key];
+        if (!b) continue;
+        const pane = side === "A" ? paneA : paneB;
+        if (pane.fileSig === b.sig) { if (b.pos) { pane.setAnchor(b.pos, "page"); pane.afterScroll(true); } }
+        else this.openBook(key, side);
+      }
+    },
+    clearPending(pane) { this.pending[pane.key] = null; },
+    async openBook(key, side) {
+      const b = this.books[key]; if (!b) return;
+      const pane = side === "A" ? paneA : paneB;
+      if (pane.fileSig === b.sig) { if (b.pos) { pane.setAnchor(b.pos, "page"); pane.afterScroll(true); } return; }
+      this.pending[side] = key;
+      let f = await idbGet("f:" + key);
+      if (this.pending[side] !== key) return;
+      if (f && f.name === b.name && f.size === b.size) { pane.open(f, false); return; }
+      if (b.repo && gh.on) {
+        pane.nameEl.textContent = b.name;
+        pane.setEmpty("Đang tải sách từ GitHub…", b.name + (b.size ? " · " + fmtMB(b.size) : ""));
+        try {
+          const blob = await gh.downloadPdf(key);
+          if (this.pending[side] !== key) return;
+          f = new File([blob], b.name, { type: "application/pdf" });
+          pane.open(f, false);
+          return;
+        } catch (e) {
+          if (this.pending[side] !== key) return;
+        }
+      }
+      pane.nameEl.textContent = b.name;
+      pane.setEmpty("Chọn lại file “" + b.name + "”",
+        "Lần trước bạn đọc tới trang " + ((b.pos ? b.pos.page : 0) + 1) + (b.pages ? " / " + b.pages : "") +
+        ". File này chưa có trên máy này" + (b.repo && !gh.on ? " (kết nối GitHub để tải về)" : "") + ". Bấm “Mở PDF” và chọn đúng file, trang sẽ mở tới chỗ đó.");
+    },
+    async remove(key) {
+      const b = this.books[key]; if (!b) return;
+      delete this.books[key]; this.localFiles.delete(key);
+      tomb.books[key] = Date.now(); saveTomb();
+      for (const k of Object.keys(this.books)) if (this.books[k].pair === key) { delete this.books[k].pair; this.books[k].at = Date.now(); }
+      if (this.session.A === key) this.session.A = null;
+      if (this.session.B === key) this.session.B = null;
+      this.saveLocal();
+      try { const db = await idb(); db.transaction("files", "readwrite").objectStore("files").delete("f:" + key); } catch (e) { /* bỏ qua */ }
+      if (b.repo) gh.deletePdf(key);
+      gh.schedule(500);
+      renderLibrary();
+      toast("Đã xóa “" + b.name + "” khỏi thư viện. Các từ đã lưu từ sách này vẫn còn trong sổ từ.");
+    },
+    importData(data) {
+      let n = 0;
+      if (data && data.books && typeof data.books === "object") {
+        for (const [k, v] of Object.entries(data.books)) {
+          if (!/^b[0-9a-f]{16}$/.test(k) || !v || typeof v.sig !== "string") continue;
+          const cur = this.books[k];
+          if (!cur || (v.at || 0) > (cur.at || 0)) { this.books[k] = Object.assign({}, v); delete this.books[k].asset; n++; }
+        }
+      }
+      this.saveLocal();
+      if (data && data.session && (data.session.at || 0) > (this.session.at || 0)) this.applySession(data.session);
+      gh.schedule(500);
+      renderLibrary();
+      return n;
+    },
+  };
+  lib.load();
+
+  /* ---------------- Đồng bộ qua repo GitHub ----------------
+     Một file song-ngu/data.json trong repo private: sổ từ, thư viện, phiên đọc, dấu xóa.
+     Ghi kèm sha của bản vừa đọc; nếu máy khác vừa ghi, GitHub trả 409/422 → đọc lại, gộp, ghi lại. */
+  const GH_CFG = "song-ngu:gh:v1", DATA_PATH = "song-ngu/data.json";
+  const stable = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x)
+    ? Object.keys(x).sort().reduce((o, kk) => { o[kk] = x[kk]; return o; }, {}) : x));
+  function b64FromBytes(bytes) {
+    let out = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) out += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(out);
+  }
+  const b64FromText = (t) => b64FromBytes(new TextEncoder().encode(t));
+  const textFromB64 = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
+  const tsItem = (x) => x.upd || x.created || 0, tsBook = (x) => x.at || x.created || 0;
+  // Gộp hai phía theo mốc thời gian; dấu xóa mới hơn bản ghi thì bản ghi bị loại.
+  function mergeSide(L, R, tL, tR, ts) {
+    const t = Object.assign({}, tR);
+    for (const [k, v] of Object.entries(tL)) if (!(t[k] >= v)) t[k] = v;
+    const out = {};
+    for (const id of new Set([...Object.keys(L), ...Object.keys(R)])) {
+      const a = L[id], b = R[id];
+      const w = a && b ? (ts(a) >= ts(b) ? a : b) : a || b;
+      if (t[id] && t[id] >= ts(w)) continue;
+      out[id] = w;
+    }
+    const cut = Date.now() - 180 * DAY;
+    for (const k of Object.keys(t)) if (t[k] < cut) delete t[k];
+    return { out, tomb: t };
+  }
+  function errText(e) {
+    const st = e && e.status;
+    if (st === 401) return "token sai hoặc đã hết hạn";
+    if (st === 403) return "token chưa có quyền Contents: Read and write, hoặc bị giới hạn tốc độ";
+    if (st === 404) return "không thấy repo, hoặc token chưa được cấp quyền cho repo này";
+    if (st) return "GitHub trả lỗi " + st;
+    return "không kết nối được GitHub";
+  }
+  const gh = {
+    cfg: null, state: "off", err: "", last: 0, timer: 0, running: null, again: false, first: true, uploading: new Set(),
+    load() {
+      try { const c = JSON.parse(localStorage.getItem(GH_CFG) || "null"); if (c && c.token && c.repo) this.cfg = c; } catch (e) { /* bỏ qua */ }
+      this.state = this.cfg ? "idle" : "off";
+    },
+    saveCfg() { try { if (this.cfg) localStorage.setItem(GH_CFG, JSON.stringify(this.cfg)); else localStorage.removeItem(GH_CFG); } catch (e) { /* bỏ qua */ } },
+    get on() { return !!this.cfg; },
+    setState(st, err) { this.state = st; this.err = err || ""; renderGhState(); },
+    api(path, opts, cfg) {
+      opts = opts || {}; cfg = cfg || this.cfg;
+      const headers = { Authorization: "Bearer " + cfg.token, Accept: opts.accept || "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+      if (opts.body) headers["Content-Type"] = "application/json";
+      return fetch("https://api.github.com/repos/" + cfg.repo + path, { method: opts.method || "GET", headers, body: opts.body, cache: "no-store" });
+    },
+    fail(r) { const e = new Error("GitHub " + r.status); e.status = r.status; return e; },
+    cpath(p) { return "/contents/" + p.split("/").map(encodeURIComponent).join("/"); },
+    async getMeta(p) {
+      const r = await this.api(this.cpath(p) + "?ref=" + encodeURIComponent(this.cfg.branch), { accept: "application/vnd.github.object+json" });
+      if (r.status === 404) return null;
+      if (!r.ok) throw this.fail(r);
+      return r.json();
+    },
+    async getRaw(p) {
+      const r = await this.api(this.cpath(p) + "?ref=" + encodeURIComponent(this.cfg.branch), { accept: "application/vnd.github.raw+json" });
+      if (!r.ok) throw this.fail(r);
+      return r;
+    },
+    async put(p, b64, sha, message) {
+      const r = await this.api(this.cpath(p), { method: "PUT", body: JSON.stringify(Object.assign({ message, content: b64, branch: this.cfg.branch }, sha ? { sha } : {})) });
+      if (!r.ok) throw this.fail(r);
+      return (await r.json()).content.sha;
+    },
+    schedule(delay) {
+      if (!this.on) return;
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => this.sync(), delay == null ? 4000 : delay);
+    },
+    sync() {
+      if (!this.on) return Promise.resolve();
+      clearTimeout(this.timer);
+      if (this.running) { this.again = true; return this.running; }
+      this.running = this.run().finally(() => { this.running = null; if (this.again) { this.again = false; this.schedule(1500); } });
+      return this.running;
+    },
+    async run() {
+      this.setState("syncing");
+      try {
+        for (let attempt = 0; ; attempt++) {
+          const meta = await this.getMeta(DATA_PATH);
+          let remote = {};
+          if (meta) {
+            const text = meta.content && meta.encoding === "base64" ? textFromB64(meta.content) : await (await this.getRaw(DATA_PATH)).text();
+            remote = JSON.parse(text || "{}");
+          }
+          const merged = this.merge(remote);
+          const rNorm = { items: remote.items || {}, books: remote.books || {}, session: remote.session || null, tomb: remote.tomb || { items: {}, books: {} } };
+          if (meta && stable(merged) === stable(rNorm)) break;
+          const body = Object.assign({ app: "doc-song-ngu", v: 3, updated: new Date().toISOString() }, merged);
+          try { await this.put(DATA_PATH, b64FromText(JSON.stringify(body, null, 1)), meta && meta.sha, "Đồng bộ đọc song ngữ"); break; }
+          catch (e) { if ((e.status === 409 || e.status === 422) && attempt < 3) continue; throw e; }
+        }
+        this.last = Date.now(); this.first = false; this.setState("idle");
+        for (const p of panes) if (p.file && p.fileSig) this.uploadPdf(lib.key(p.fileSig), p.file, false);
+      } catch (e) { this.setState("error", errText(e)); }
+    },
+    // Gộp dữ liệu repo vào máy này và trả về bản gộp để ghi lên repo.
+    merge(remote) {
+      const rt = remote.tomb || {};
+      const localItems = {}; for (const x of store.all()) localItems[x.id] = store.clean(x);
+      const it = mergeSide(localItems, remote.items || {}, tomb.items, rt.items || {}, tsItem);
+      const bk = mergeSide(lib.books, remote.books || {}, tomb.books, rt.books || {}, tsBook);
+      const ls = lib.session, rs = remote.session;
+      const session = rs && (rs.at || 0) > (ls.at || 0) ? rs : ls;
+      tomb = { items: it.tomb, books: bk.tomb }; saveTomb();
+      if (stable(localItems) !== stable(it.out)) {
+        const m = new Map(); for (const [k, v] of Object.entries(JSON.parse(JSON.stringify(it.out)))) { v.id = k; m.set(k, v); }
+        store.replaceAll(m);
+      }
+      if (stable(lib.books) !== stable(bk.out)) { lib.books = JSON.parse(JSON.stringify(bk.out)); lib.saveLocal(); }
+      if (session !== ls) {
+        const s = JSON.parse(JSON.stringify(session));
+        // Chỉ nhảy sách/trang ở lần đồng bộ đầu sau khi mở trang; giữa chừng thì không giật trang đang đọc.
+        if (this.first) { if (lib.restoredLocal) lib.applySession(s); else lib.pendingSession = s; }
+        else { lib.session = s; lib.saveLocal(); }
+      }
+      renderLibrary(); renderNotebook();
+      return { items: it.out, books: bk.out, session, tomb: { items: it.tomb, books: bk.tomb } };
+    },
+    async uploadPdf(key, file, loud) {
+      const b = lib.books[key];
+      if (!this.on || !b || b.repo || !settings.cloudPdf || this.uploading.has(key)) return;
+      if (file.size > MAX_PDF) {
+        if (loud) toast("“" + b.name + "” lớn hơn 40 MB nên chỉ lưu trên máy này. Ở máy khác chọn lại file, vị trí đọc vẫn được giữ.");
+        b.tooBig = true; return;
+      }
+      this.uploading.add(key); renderLibrary();
+      try {
+        const b64 = b64FromBytes(new Uint8Array(await file.arrayBuffer()));
+        try { await this.put("song-ngu/books/" + key + ".pdf", b64, null, "Thêm sách " + b.name); }
+        catch (e) { if (e.status !== 422) throw e; /* file đã có sẵn trong repo */ }
+        const cur = lib.books[key];
+        if (cur) { cur.repo = true; cur.at = Date.now(); lib.saveLocal(); this.schedule(500); }
+        if (loud) toast("Đã lưu “" + b.name + "” vào repo. Máy khác mở trang là có sách này.");
+      } catch (e) {
+        if (loud) toast("Chưa lưu được PDF lên GitHub (" + errText(e) + "). Lần đồng bộ sau sẽ thử lại.");
+      } finally { this.uploading.delete(key); renderLibrary(); }
+    },
+    async downloadPdf(key) { return (await this.getRaw("song-ngu/books/" + key + ".pdf")).blob(); },
+    async deletePdf(key) {
+      const p = "song-ngu/books/" + key + ".pdf";
+      try {
+        const m = await this.getMeta(p);
+        if (m) await this.api(this.cpath(p), { method: "DELETE", body: JSON.stringify({ message: "Xóa sách", sha: m.sha, branch: this.cfg.branch }) });
+      } catch (e) { /* còn trong lịch sử commit, không sao */ }
+    },
+    async connect(repo, branch, token) {
+      const cfg = { repo, branch: branch || "", token };
+      const r = await this.api("", null, cfg);
+      if (!r.ok) throw this.fail(r);
+      const j = await r.json();
+      if (j.permissions && j.permissions.push === false) { const e = new Error("no push"); e.status = 403; throw e; }
+      cfg.branch = branch || j.default_branch || "main";
+      this.cfg = cfg; this.saveCfg(); this.first = true;
+      return j;
+    },
+    disconnect() { this.cfg = null; this.saveCfg(); clearTimeout(this.timer); this.setState("off"); },
+  };
+
+  function renderGhState() {
+    const st = gh.state, cfg = gh.cfg;
+    for (const d of [$("ghDot"), $("ghDotTop")]) d.className = "gh-dot " + st;
+    $("ghDotTop").hidden = st === "off";
+    const t = st === "off" ? "Chưa đồng bộ. Dữ liệu chỉ nằm trên trình duyệt này."
+      : st === "syncing" ? "Đang đồng bộ với " + cfg.repo + "…"
+      : st === "error" ? "Lỗi đồng bộ: " + gh.err + "."
+      : "Đã đồng bộ với " + cfg.repo + (gh.last ? " lúc " + new Date(gh.last).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "") + ".";
+    $("ghStatus").textContent = t;
+    $("ghBtn").textContent = gh.on ? "Cài đặt GitHub" : "Kết nối GitHub";
+    $("ghBtn").classList.toggle("primary", !gh.on);
+    $("ghSyncNow").hidden = !gh.on;
+    $("optCloudWrap").hidden = !gh.on;
+    $("syncState").textContent = gh.on
+      ? "Sổ từ, lịch sử đọc và độ lệch trang được gộp vào song-ngu/data.json trong repo. Mở trang trên máy khác (đã kết nối cùng repo) là sách và vị trí đọc tự về."
+      : "Kết nối một repo GitHub private để dùng sổ từ và lịch sử đọc trên nhiều máy. Hoặc dùng Sao lưu toàn bộ để chuyển tay.";
+  }
+  const ghDlg = $("ghDlg");
+  $("ghBtn").addEventListener("click", () => {
+    $("ghRepo").value = gh.cfg ? gh.cfg.repo : "";
+    $("ghBranch").value = gh.cfg ? gh.cfg.branch : "";
+    $("ghToken").value = "";
+    $("ghToken").placeholder = gh.cfg ? "Đã lưu. Để trống nếu giữ token cũ" : "github_pat_…";
+    $("ghDisconnect").hidden = !gh.on;
+    $("ghMsg").textContent = ""; $("ghMsg").className = "small";
+    ghDlg.hidden = false; setTimeout(() => $("ghRepo").focus(), 30);
+  });
+  $("ghClose").addEventListener("click", () => { ghDlg.hidden = true; });
+  ghDlg.addEventListener("click", (e) => { if (e.target === ghDlg) ghDlg.hidden = true; });
+  $("ghDisconnect").addEventListener("click", () => {
+    gh.disconnect(); ghDlg.hidden = true;
+    toast("Đã ngắt kết nối trên máy này. Dữ liệu trên máy và trong repo vẫn giữ nguyên.");
+  });
+  $("ghForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = $("ghMsg");
+    const repo = $("ghRepo").value.trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\.git$|\/$/g, "");
+    const token = $("ghToken").value.trim() || (gh.cfg && gh.cfg.token) || "";
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { msg.className = "small msg-err"; msg.textContent = "Repo cần có dạng chủ/tên, ví dụ ten-ban/song-ngu-data."; return; }
+    if (!token) { msg.className = "small msg-err"; msg.textContent = "Dán token vào ô Token."; return; }
+    msg.className = "small"; msg.textContent = "Đang kiểm tra…"; $("ghSave").disabled = true;
+    try {
+      const j = await gh.connect(repo, $("ghBranch").value.trim(), token);
+      ghDlg.hidden = true;
+      toast(j.private === false ? "Đã kết nối. Lưu ý: repo này đang public, ai cũng xem được sổ từ và sách. Nên chuyển sang private." : "Đã kết nối " + repo + ". Đang đồng bộ…");
+      await gh.sync();
+    } catch (err) {
+      msg.className = "small msg-err"; msg.textContent = "Không kết nối được: " + errText(err) + ".";
+    } finally { $("ghSave").disabled = false; }
+  });
+  $("ghSyncNow").addEventListener("click", () => gh.sync());
+  $("optCloud").addEventListener("change", (e) => {
+    settings.cloudPdf = e.target.checked; saveSoon();
+    if (settings.cloudPdf) for (const p of panes) if (p.file && p.fileSig) gh.uploadPdf(lib.key(p.fileSig), p.file, true);
+  });
+  // Kéo thay đổi từ máy khác: khi quay lại tab và định kỳ khi đang mở.
+  document.addEventListener("visibilitychange", () => {
+    if (!gh.on) return;
+    if (document.visibilityState === "visible") { if (Date.now() - gh.last > 60e3) gh.sync(); }
+    else if (gh.timer) gh.sync();
+  });
+  setInterval(() => { if (gh.on && document.visibilityState === "visible" && !gh.running) gh.sync(); }, 3 * 60e3);
+
+  function renderLibrary() {
+    if (drawer.hidden || settings.tab !== "lib") return;
+    const list = Object.entries(lib.books).sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
+    $("nbSummary").textContent = list.length ? list.length + " sách" : "";
+    const ul = $("libList"); ul.replaceChildren();
+    if (!list.length) {
+      ul.append(h("li", { class: "nb-empty" }, h("strong", { text: "Chưa có sách nào." }),
+        "Mở một file PDF ở bên tiếng Việt hoặc tiếng Anh. Sách và vị trí đọc sẽ hiện ở đây, và ở các máy khác khi đã kết nối GitHub."));
+    }
+    const openKeys = panes.map((p) => (p.fileSig ? lib.key(p.fileSig) : null));
+    for (const [key, b] of list) {
+      const pg = b.pos ? b.pos.page + 1 : 1, total = b.pages || 0;
+      const pct = total ? Math.round((pg / total) * 100) : 0;
+      const where = gh.uploading.has(key) ? "đang tải PDF lên GitHub…" : b.repo ? "PDF trên GitHub" : b.tooBig ? "PDF > 40 MB, chỉ trên máy" : "PDF chỉ trên máy đã mở";
+      const isOpen = openKeys.includes(key);
+      const pair = b.pair && lib.books[b.pair];
+      const del = h("button", { class: "btn lib-del" + (lib.delArmed === key ? " armed" : ""), text: lib.delArmed === key ? "Xóa hẳn?" : "Xóa",
+        "aria-label": "Xóa " + b.name + " khỏi thư viện",
+        onclick: () => {
+          if (lib.delArmed !== key) { lib.delArmed = key; renderLibrary(); setTimeout(() => { if (lib.delArmed === key) { lib.delArmed = null; renderLibrary(); } }, 3000); return; }
+          lib.delArmed = null; lib.remove(key);
+        } });
+      ul.append(h("li", { class: "nb-item" }, h("div", { class: "lib-row" },
+        h("button", { class: "lib-main", onclick: () => openFromLibrary(key) },
+          h("span", { class: "lib-lang", text: b.lang === "vi" ? "VI" : "EN" }),
+          h("span", { class: "lib-name", text: b.name }),
+          h("span", { class: "nb-meta" }, isOpen ? h("span", { class: "lib-open", text: "Đang mở · " }) : null,
+            "tr. " + pg + (total ? " / " + total : "") + " · " + ago(b.at || b.created || Date.now()) + " · " + where),
+          pair ? h("span", { class: "nb-meta", text: "Cặp với: " + pair.name }) : null,
+          total ? h("span", { class: "prog" }, h("i", { style: "width:" + pct + "%" })) : null),
+        del)));
+    }
+    renderGhState();
+  }
+  function openFromLibrary(key) {
+    const b = lib.books[key]; if (!b) return;
+    const side = b.side === "A" || b.side === "B" ? b.side : b.lang === "vi" ? "A" : "B";
+    lib.openBook(key, side);
+    const pairKey = b.pair, pb = pairKey && lib.books[pairKey];
+    if (pb) {
+      const ps = side === "A" ? "B" : "A";
+      const pp = ps === "A" ? paneA : paneB;
+      if (pp.fileSig !== pb.sig) lib.openBook(pairKey, ps);
+    }
+    if (window.matchMedia("(max-width: 760px)").matches) toggleNotebook(false);
+  }
+
+  /* ---------------- Khôi phục phiên trước ---------------- */
+  (async function restore() {
+    if (saved.settings) Object.assign(settings, saved.settings);
+    gh.load();
+    applySettings(); updateSyncState(); renderNotebook();
+    const pos = saved.pos || {}, files = saved.files || {};
+    for (const p of panes) {
+      const key = lib.session[p.key];
+      if (key && lib.books[key]) { lib.openBook(key, p.key); continue; }
+      const f = await idbGet(p.key);
+      if (f && files[p.key] === f.name + "|" + f.size) p.open(f, false, pos[p.key]);
+    }
+    lib.restoredLocal = true;
+    if (lib.pendingSession) { const s = lib.pendingSession; lib.pendingSession = null; lib.applySession(s); }
+    if (gh.on) gh.sync();
+  })();
+})();
+</script>
+</body>
+</html>
